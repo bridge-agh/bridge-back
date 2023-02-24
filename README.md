@@ -18,13 +18,17 @@ Steps:
 
         1. Create a Python venv
 
-        2. ```bash
+        2. Install Poetry
+
+           ```bash
            pip install poetry
            ```
 
 2. Enter project directory
 
-3. ```bash
+3. Install project dependencies
+
+   ```bash
    poetry install
    ```
 
