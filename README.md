@@ -1,5 +1,7 @@
 # Bridge Backend
 
+API URL: <https://bridge-back-afhyegyfua-ez.a.run.app>
+
 ## Setup
 
 Requirements:
