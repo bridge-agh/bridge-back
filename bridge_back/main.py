@@ -9,4 +9,4 @@ app.include_router(healthcheck.router)
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Hello test"}
