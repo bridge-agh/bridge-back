@@ -38,6 +38,8 @@ class GetLobbyResponse(BaseModel):
 
 
 @router.get("/getLobby")
-async def get_lobby(lobby_id: LobbyId) -> GetLobbyResponse:
+async def get_lobby(lobby_id: LobbyId, poll: bool = False) -> GetLobbyResponse:
     lobby = backend.lobby.get_lobby(lobby_id)
+    if poll:
+        await lobby.poll()
     return GetLobbyResponse(host_id=lobby.host, users=lobby.users)

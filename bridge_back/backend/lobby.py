@@ -1,5 +1,6 @@
 from uuid import uuid4
 from fastapi import HTTPException
+import asyncio
 from bridge_back.backend.types import LobbyId, UserId
 
 
@@ -28,6 +29,19 @@ class Lobby:
         self.id = id
         self.host = host
         self.users: list[UserId] = [host]
+        self.pollers: list[asyncio.Event] = []
+
+    async def poll(self):
+        event = asyncio.Event()
+        self.pollers.append(event)
+        try:
+            await event.wait()
+        finally:
+            self.pollers.remove(event)
+
+    def notify_pollers(self):
+        for poller in self.pollers:
+            poller.set()
 
     def join(self, user: UserId):
         if len(self.users) >= 4:
@@ -35,11 +49,13 @@ class Lobby:
         if user in self.users:
             raise UserAlreadyJoined()
         self.users.append(user)
+        self.notify_pollers()
 
     def leave(self, user: UserId):
         if user not in self.users:
             raise UserNotFound()
         self.users.remove(user)
+        self.notify_pollers()
 
 
 LOBBIES: dict[LobbyId, Lobby] = {}
