@@ -43,3 +43,13 @@ async def get_lobby(lobby_id: LobbyId, poll: bool = False) -> GetLobbyResponse:
     if poll:
         await lobby.poll()
     return GetLobbyResponse(host_id=lobby.host, users=lobby.users)
+
+
+class FindLobbyResponse(BaseModel):
+    lobby_id: LobbyId
+
+
+@router.get("/findLobby")
+async def find_lobby(user_id: UserId) -> FindLobbyResponse:
+    lobby_id = backend.lobby.find_lobby(user_id)
+    return FindLobbyResponse(lobby_id=lobby_id)

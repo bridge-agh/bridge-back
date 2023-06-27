@@ -2,6 +2,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 import asyncio
 from bridge_back.backend.types import LobbyId, UserId
+from datetime import datetime
 
 
 class LobbyNotFound(HTTPException):
@@ -30,6 +31,7 @@ class Lobby:
         self.host = host
         self.users: list[UserId] = [host]
         self.pollers: list[asyncio.Event] = []
+        self.created = datetime.now()
 
     async def poll(self):
         event = asyncio.Event()
@@ -71,3 +73,10 @@ def get_lobby(lobby_id: LobbyId) -> Lobby:
     if lobby_id not in LOBBIES:
         raise LobbyNotFound()
     return LOBBIES[lobby_id]
+
+
+def find_lobby(user_id: UserId) -> LobbyId:
+    for lobby_id, lobby in sorted(LOBBIES.items(), key=lambda x: x[1].created, reverse=True):
+        if user_id in lobby.users:
+            return lobby_id
+    raise LobbyNotFound()
