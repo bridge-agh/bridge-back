@@ -1,8 +1,8 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from bridge_back.backend.types import UserId
-from bridge_back.backend.session import get_session
-
+from bridge_back.backend.session import get_session, find_session
 from . import lobby
 
 
@@ -20,3 +20,12 @@ async def heartbeat(user_id: UserId, session_id: str):
 
 
 # --------------------------------- #
+
+
+class FindSessionResponse(BaseModel):
+    session_id: str
+
+
+@router.get("/find")
+async def find_session(user_id: UserId):
+    return find_session(user_id)
