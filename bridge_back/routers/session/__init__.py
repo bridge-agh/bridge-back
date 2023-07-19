@@ -3,12 +3,13 @@ from pydantic import BaseModel
 
 from bridge_back.backend.types import UserId
 from bridge_back.backend.session import get_session, find_session
-from . import lobby
+from . import lobby, game
 
 
 router = APIRouter(prefix="/session")
 
 router.include_router(lobby.router)
+router.include_router(game.router)
 
 
 # --------------------------------- #
