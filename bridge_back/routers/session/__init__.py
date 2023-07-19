@@ -28,4 +28,5 @@ class FindSessionResponse(BaseModel):
 
 @router.get("/find")
 async def find_session(user_id: UserId):
-    return find_session(user_id)
+    session_id = find_session(user_id)
+    return FindSessionResponse(session_id=session_id)

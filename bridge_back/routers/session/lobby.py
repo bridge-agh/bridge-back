@@ -79,16 +79,3 @@ async def set_player_ready(session_id: SessionId, user_id: UserId):
 
 
 # --------------------------------- #
-
-
-# class FindLobbyResponse(BaseModel):
-#     session_id: SessionId
-
-
-# @router.get("/findLobby")
-# async def find_lobby(user_id: UserId) -> FindLobbyResponse:
-#     session_id = backend.session.find_session(user_id)
-#     return FindLobbyResponse(session_id=session_id)
-
-
-# --------------------------------- #
