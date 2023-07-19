@@ -37,6 +37,7 @@ class Session:
         self.host_id = host_id
         self.users: dict[UserId, User] = {host_id: User(host_id)}
         self.created = datetime.now()
+        self.started = False
 
     def join(self, user_id: UserId):
         if len(self.users) >= 4:
@@ -58,6 +59,8 @@ class Session:
         if user_id not in self.users:
             raise UserNotFound()
         self.users[user_id].ready = True
+        if all(user.ready for user in self.users.values()):
+            self.started = True
 
     def heartbeat(self, user_id: UserId):
         if user_id not in self.users:

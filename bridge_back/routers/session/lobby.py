@@ -58,6 +58,7 @@ class GetInfoResponse(BaseModel):
     host_id: UserId
     users: list[UserId]
     ready: list[bool]
+    started: bool
 
 
 @router.get("/info")
@@ -67,6 +68,7 @@ async def get_lobby_info(session_id: SessionId) -> GetInfoResponse:
         host_id=session.host_id,
         users=session.users.keys(),
         ready=[user.ready for user in session.users.values()],
+        started=session.started,
     )
 
 
