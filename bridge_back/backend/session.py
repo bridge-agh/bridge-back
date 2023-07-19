@@ -24,47 +24,58 @@ class UserNotFound(HTTPException):
         super().__init__(404, "User not found")
 
 
-class Session:
-    def __init__(self, id: SessionId, host: UserId):
+class User:
+    def __init__(self, id: UserId):
         self.id = id
-        self.host = host
-        self.users: list[UserId] = [host]
+        self.ready = False
+
+
+class Session:
+    def __init__(self, session_id: SessionId, host_id: UserId):
+        self.session_id = session_id
+        self.host_id = host_id
+        self.users: dict[UserId, User] = {host_id: User(host_id)}
         self.created = datetime.now()
 
-    def join(self, user: UserId):
+    def join(self, user_id: UserId):
         if len(self.users) >= 4:
             raise SessionFull()
-        if user in self.users:
+        if user_id in self.users:
             raise UserAlreadyJoined()
-        self.users.append(user)
+        self.users
 
-    def leave(self, user: UserId):
-        if user not in self.users:
+    def leave(self, user_id: UserId):
+        if user_id not in self.users:
             raise UserNotFound()
-        self.users.remove(user)
+        del self.users[user_id]
         if len(self.users) == 0:
-            del LOBBIES[self.id]
-        if user == self.host:
-            self.host = self.users[0]
+            del SESSIONS[self.session_id]
+        if user_id == self.host_id:
+            self.host_id = next(iter(self.users))
+
+    def ready(self, user_id: UserId):
+        if user_id not in self.users:
+            raise UserNotFound()
+        self.users[user_id].ready = True
 
 
-LOBBIES: dict[SessionId, Session] = {}
+SESSIONS: dict[SessionId, Session] = {}
 
 
 def create_session(host_id: UserId) -> SessionId:
     session_id = str(uuid4())
-    LOBBIES[session_id] = Session(session_id, host_id)
+    SESSIONS[session_id] = Session(session_id, host_id)
     return session_id
 
 
 def get_session(session_id: SessionId) -> Session:
-    if session_id not in LOBBIES:
+    if session_id not in SESSIONS:
         raise SessionNotFound()
-    return LOBBIES[session_id]
+    return SESSIONS[session_id]
 
 
 def find_session(user_id: UserId) -> SessionId:
-    for session_id, session in sorted(LOBBIES.items(), key=lambda x: x[1].created, reverse=True):
+    for session_id, session in sorted(SESSIONS.items(), key=lambda x: x[1].created, reverse=True):
         if user_id in session.users:
             return session_id
     raise SessionNotFound()
