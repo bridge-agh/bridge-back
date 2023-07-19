@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import healthcheck
-from .routers import lobby
+from .routers import session
 
 
 app = FastAPI()
@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(healthcheck.router)
-app.include_router(lobby.router)
+app.include_router(session.router)
 
 
 @app.get("/")

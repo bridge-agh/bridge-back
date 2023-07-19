@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from bridge_back.backend.types import LobbyId, UserId
+from bridge_back.backend.types import SessionId, UserId
 from bridge_back import backend
 
 
@@ -13,23 +13,23 @@ class CreateLobbyRequest(BaseModel):
 
 
 class CreateLobbyResponse(BaseModel):
-    lobby_id: LobbyId
+    session_id: SessionId
 
 
 @router.post("/createLobby")
 async def create_lobby(request: CreateLobbyRequest) -> CreateLobbyResponse:
-    lobby_id = backend.lobby.create_lobby(request.host_id)
-    return CreateLobbyResponse(lobby_id=lobby_id)
+    session_id = backend.session.create_session(request.host_id)
+    return CreateLobbyResponse(session_id=session_id)
 
 
 class JoinLobbyRequest(BaseModel):
     user_id: UserId
-    lobby_id: LobbyId
+    session_id: SessionId
 
 
 @router.post("/joinLobby")
 async def join_lobby(request: JoinLobbyRequest):
-    backend.lobby.get_lobby(request.lobby_id).join(request.user_id)
+    backend.session.get_session(request.session_id).join(request.user_id)
 
 
 class GetLobbyResponse(BaseModel):
@@ -38,18 +38,16 @@ class GetLobbyResponse(BaseModel):
 
 
 @router.get("/getLobby")
-async def get_lobby(lobby_id: LobbyId, poll: bool = False) -> GetLobbyResponse:
-    lobby = backend.lobby.get_lobby(lobby_id)
-    if poll:
-        await lobby.poll()
-    return GetLobbyResponse(host_id=lobby.host, users=lobby.users)
+async def get_lobby(session_id: SessionId) -> GetLobbyResponse:
+    session = backend.session.get_session(session_id)
+    return GetLobbyResponse(host_id=session.host, users=session.users)
 
 
 class FindLobbyResponse(BaseModel):
-    lobby_id: LobbyId
+    session_id: SessionId
 
 
 @router.get("/findLobby")
 async def find_lobby(user_id: UserId) -> FindLobbyResponse:
-    lobby_id = backend.lobby.find_lobby(user_id)
-    return FindLobbyResponse(lobby_id=lobby_id)
+    session_id = backend.session.find_session(user_id)
+    return FindLobbyResponse(session_id=session_id)

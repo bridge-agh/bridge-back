@@ -1,2 +1,2 @@
-from . import lobby
+from . import session
 from . import types
