@@ -28,6 +28,7 @@ class User:
     def __init__(self, id: UserId):
         self.id = id
         self.ready = False
+        self.last_heartbeat = datetime.now()
 
 
 class Session:
@@ -57,6 +58,11 @@ class Session:
         if user_id not in self.users:
             raise UserNotFound()
         self.users[user_id].ready = True
+
+    def heartbeat(self, user_id: UserId):
+        if user_id not in self.users:
+            raise UserNotFound()
+        self.users[user_id].last_heartbeat = datetime.now()
 
 
 SESSIONS: dict[SessionId, Session] = {}
