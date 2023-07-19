@@ -43,7 +43,7 @@ class Session:
             raise SessionFull()
         if user_id in self.users:
             raise UserAlreadyJoined()
-        self.users
+        self.users[user_id] = User(user_id)
 
     def leave(self, user_id: UserId):
         if user_id not in self.users:
