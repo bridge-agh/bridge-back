@@ -66,7 +66,7 @@ async def get_lobby_info(session_id: SessionId) -> GetInfoResponse:
     session = backend.session.get_session(session_id)
     return GetInfoResponse(
         host_id=session.host_id,
-        users=session.users.keys(),
+        users=list(session.users.keys()),
         ready=[user.ready for user in session.users.values()],
         started=session.started,
     )
