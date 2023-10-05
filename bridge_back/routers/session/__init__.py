@@ -15,9 +15,14 @@ router.include_router(game.router)
 # --------------------------------- #
 
 
+class HeartbeatRequest(BaseModel):
+    user_id: UserId
+    session_id: str
+
+
 @router.post("/heartbeat")
-async def heartbeat(user_id: UserId, session_id: str):
-    get_session(session_id).heartbeat(user_id)
+async def heartbeat(request: HeartbeatRequest):
+    get_session(request.session_id).heartbeat(request.user_id)
 
 
 # --------------------------------- #
