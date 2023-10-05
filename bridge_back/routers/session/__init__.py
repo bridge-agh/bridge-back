@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from bridge_back.backend.types import UserId
-from bridge_back.backend.session import get_session, find_session
+from bridge_back import backend
 from . import lobby, game
 
 
@@ -22,7 +22,7 @@ class HeartbeatRequest(BaseModel):
 
 @router.post("/heartbeat")
 async def heartbeat(request: HeartbeatRequest):
-    get_session(request.session_id).heartbeat(request.user_id)
+    backend.session.get_session(request.session_id).heartbeat(request.user_id)
 
 
 # --------------------------------- #
@@ -34,5 +34,5 @@ class FindSessionResponse(BaseModel):
 
 @router.get("/find")
 async def find_session(user_id: UserId):
-    session_id = find_session(user_id)
+    session_id = backend.session.find_session(user_id)
     return FindSessionResponse(session_id=session_id)
