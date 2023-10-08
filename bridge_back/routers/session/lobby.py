@@ -21,6 +21,12 @@ class CreateLobbyResponse(BaseModel):
 
 @router.post("/create")
 async def create_lobby(request: CreateLobbyRequest) -> CreateLobbyResponse:
+    while True:
+        try:
+            old_session_id = backend.session.find_session(request.host_id)
+            backend.session.get_session(old_session_id).leave(request.host_id)
+        except backend.session.SessionNotFound:
+            break
     session_id = backend.session.create_session(request.host_id)
     return CreateLobbyResponse(session_id=session_id)
 
@@ -35,6 +41,12 @@ class JoinLobbyRequest(BaseModel):
 
 @router.post("/join")
 async def join_lobby(request: JoinLobbyRequest):
+    while True:
+        try:
+            old_session_id = backend.session.find_session(request.user_id)
+            backend.session.get_session(old_session_id).leave(request.user_id)
+        except backend.session.SessionNotFound:
+            break
     backend.session.get_session(request.session_id).join(request.user_id)
 
 
