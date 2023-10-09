@@ -52,6 +52,7 @@ class Session:
         del self.users[user_id]
         if len(self.users) == 0:
             del SESSIONS[self.session_id]
+            return
         if user_id == self.host_id:
             self.host_id = next(iter(self.users))
 
