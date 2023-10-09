@@ -1,3 +1,4 @@
+from enum import Enum
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -11,13 +12,62 @@ router = APIRouter(prefix="/game")
 # --------------------------------- #
 
 
-class GetInfoResponse(BaseModel):
-    pass
+class GameStage(str, Enum):
+    BIDDING = "bidding"
+    PLAYING = "playing"
+    SCORING = "scoring"
 
 
-@router.get("/info")
-async def get_info(session_id: SessionId, user_id: UserId):
-    pass
+class PlayerDirection(str, Enum):
+    N = "n"
+    E = "e"
+    S = "s"
+    W = "w"
+
+
+class PairDirection(str, Enum):
+    NS = "ns"
+    EW = "ew"
+
+
+Bid = str
+Card = str
+
+
+class BiddingObservation(BaseModel):
+    first_dealer: PlayerDirection
+    bid_history: list[Bid]
+    bid: Bid
+    declarer: PlayerDirection
+    multiplier: int
+
+
+class TrickTakenObservation(BaseModel):
+    ns: list[Card]
+    ew: list[Card]
+
+
+class GameObservation(BaseModel):
+    round_player: PlayerDirection
+    round_cards: list[Card]
+    dummy: list[Card]
+    tricks: TrickTakenObservation
+
+
+class PlayerObservation(BaseModel):
+    game_stage: GameStage
+    current_player: PlayerDirection
+    bidding: BiddingObservation
+    game: GameObservation
+    hand: list[Card]
+
+
+@router.get("/observe")
+async def get_observation(session_id: SessionId, user_id: UserId) -> PlayerObservation:
+    game = backend.session.get_session(session_id).get_game()
+    observation = game.player_observation(...)
+    ...
+    return PlayerObservation(...)
 
 
 # --------------------------------- #

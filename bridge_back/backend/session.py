@@ -1,7 +1,9 @@
 from uuid import uuid4
 from fastapi import HTTPException
-from bridge_back.backend.types import SessionId, UserId
 from datetime import datetime
+import random
+from bridge_back.backend.types import SessionId, UserId
+from bridge_core_py import core as bc
 
 
 class SessionNotFound(HTTPException):
@@ -24,6 +26,11 @@ class UserNotFound(HTTPException):
         super().__init__(404, "User not found")
 
 
+class GameNotStarted(HTTPException):
+    def __init__(self):
+        super().__init__(418, "Game not started")
+
+
 class User:
     def __init__(self, id: UserId):
         self.id = id
@@ -38,6 +45,12 @@ class Session:
         self.users: dict[UserId, User] = {host_id: User(host_id)}
         self.created = datetime.now()
         self.started = False
+        self.game = bc.Game(seed=random.randint(0, 2**32))
+
+    def get_game(self) -> bc.Game:
+        if not self.started:
+            raise GameNotStarted()
+        return self.game
 
     def join(self, user_id: UserId):
         if len(self.users) >= 4:
