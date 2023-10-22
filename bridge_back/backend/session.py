@@ -29,6 +29,7 @@ class User:
         self.id = id
         self.ready = False
         self.last_heartbeat = datetime.now()
+        self.position = None
 
 
 class Session:
@@ -45,6 +46,17 @@ class Session:
         if user_id in self.users:
             raise UserAlreadyJoined()
         self.users[user_id] = User(user_id)
+        for position in ["North", "South", "West", "East"]:
+            if position not in [user.position for user in self.users.values()]:
+                self.users[user_id].position = position
+                break
+
+    def force_swap(self, first_position: str, second_position: str):
+        for user in self.users.values():
+            if user.position == first_position:
+                user.position = second_position
+            elif user.position == second_position:
+                user.position = first_position
 
     def leave(self, user_id: UserId):
         if user_id not in self.users:
@@ -75,6 +87,7 @@ SESSIONS: dict[SessionId, Session] = {}
 def create_session(host_id: UserId) -> SessionId:
     session_id = str(uuid4())
     SESSIONS[session_id] = Session(session_id, host_id)
+    SESSIONS[session_id].users[host_id].position = "North"
     return session_id
 
 
