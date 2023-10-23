@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from bridge_back import backend
+from bridge_back.backend.session import PlayerPosition
 from bridge_back.backend.types import SessionId, UserId
 
 router = APIRouter(prefix="/lobby")
@@ -70,7 +71,7 @@ async def leave_lobby(request: LeaveLobbyRequest):
 class Player(BaseModel):
     id: UserId
     ready: bool
-    position: Optional[str]
+    position: Optional[PlayerPosition]
 
 
 class GetInfoResponse(BaseModel):
@@ -99,8 +100,8 @@ async def get_lobby_info(session_id: SessionId) -> GetInfoResponse:
 
 
 class ForceSwapRequest(BaseModel):
-    first_position: str
-    second_position: str
+    first_position: PlayerPosition
+    second_position: PlayerPosition
     session_id: SessionId
 
 

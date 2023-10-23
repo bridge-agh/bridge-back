@@ -1,3 +1,4 @@
+from enum import Enum
 from uuid import uuid4
 from fastapi import HTTPException
 from bridge_back.backend.types import SessionId, UserId
@@ -24,6 +25,13 @@ class UserNotFound(HTTPException):
         super().__init__(404, "User not found")
 
 
+class PlayerPosition(Enum):
+    NORTH = 0
+    EAST = 1
+    SOUTH = 2
+    WEST = 3
+
+
 class User:
     def __init__(self, id: UserId):
         self.id = id
@@ -37,6 +45,7 @@ class Session:
         self.session_id = session_id
         self.host_id = host_id
         self.users: dict[UserId, User] = {host_id: User(host_id)}
+        self.users[host_id].position = PlayerPosition.NORTH
         self.created = datetime.now()
         self.started = False
 
@@ -46,7 +55,7 @@ class Session:
         if user_id in self.users:
             raise UserAlreadyJoined()
         self.users[user_id] = User(user_id)
-        for position in ["North", "South", "West", "East"]:
+        for position in PlayerPosition:
             if position not in [user.position for user in self.users.values()]:
                 self.users[user_id].position = position
                 break
@@ -87,7 +96,6 @@ SESSIONS: dict[SessionId, Session] = {}
 def create_session(host_id: UserId) -> SessionId:
     session_id = str(uuid4())
     SESSIONS[session_id] = Session(session_id, host_id)
-    SESSIONS[session_id].users[host_id].position = "North"
     return session_id
 
 
