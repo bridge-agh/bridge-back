@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 from uuid import uuid4
 from fastapi import HTTPException
 from bridge_back.backend.types import SessionId, UserId
@@ -37,7 +38,7 @@ class User:
         self.id = id
         self.ready = False
         self.last_heartbeat = datetime.now()
-        self.position = None
+        self.position: Optional[PlayerDirection] = None
 
 
 class Session:
