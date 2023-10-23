@@ -1,3 +1,5 @@
+from enum import Enum
+from typing import Optional
 from uuid import uuid4
 from fastapi import HTTPException
 from bridge_back.backend.types import SessionId, UserId
@@ -24,11 +26,19 @@ class UserNotFound(HTTPException):
         super().__init__(404, "User not found")
 
 
+class PlayerDirection(Enum):
+    NORTH = 0
+    EAST = 1
+    SOUTH = 2
+    WEST = 3
+
+
 class User:
     def __init__(self, id: UserId):
         self.id = id
         self.ready = False
         self.last_heartbeat = datetime.now()
+        self.position: Optional[PlayerDirection] = None
 
 
 class Session:
@@ -36,6 +46,7 @@ class Session:
         self.session_id = session_id
         self.host_id = host_id
         self.users: dict[UserId, User] = {host_id: User(host_id)}
+        self.users[host_id].position = PlayerDirection.NORTH
         self.created = datetime.now()
         self.started = False
 
@@ -45,6 +56,17 @@ class Session:
         if user_id in self.users:
             raise UserAlreadyJoined()
         self.users[user_id] = User(user_id)
+        for position in PlayerDirection:
+            if position not in [user.position for user in self.users.values()]:
+                self.users[user_id].position = position
+                break
+
+    def force_swap(self, first_position: PlayerDirection, second_position: PlayerDirection):
+        for user in self.users.values():
+            if user.position == first_position:
+                user.position = second_position
+            elif user.position == second_position:
+                user.position = first_position
 
     def leave(self, user_id: UserId):
         if user_id not in self.users:
