@@ -25,7 +25,7 @@ class UserNotFound(HTTPException):
         super().__init__(404, "User not found")
 
 
-class PlayerPosition(Enum):
+class PlayerDirection(Enum):
     NORTH = 0
     EAST = 1
     SOUTH = 2
@@ -45,7 +45,7 @@ class Session:
         self.session_id = session_id
         self.host_id = host_id
         self.users: dict[UserId, User] = {host_id: User(host_id)}
-        self.users[host_id].position = PlayerPosition.NORTH
+        self.users[host_id].position = PlayerDirection.NORTH
         self.created = datetime.now()
         self.started = False
 
@@ -55,7 +55,7 @@ class Session:
         if user_id in self.users:
             raise UserAlreadyJoined()
         self.users[user_id] = User(user_id)
-        for position in PlayerPosition:
+        for position in PlayerDirection:
             if position not in [user.position for user in self.users.values()]:
                 self.users[user_id].position = position
                 break
