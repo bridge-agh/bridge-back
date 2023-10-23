@@ -60,7 +60,7 @@ class Session:
                 self.users[user_id].position = position
                 break
 
-    def force_swap(self, first_position: str, second_position: str):
+    def force_swap(self, first_position: PlayerDirection, second_position: PlayerDirection):
         for user in self.users.values():
             if user.position == first_position:
                 user.position = second_position
