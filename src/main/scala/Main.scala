@@ -19,11 +19,80 @@ object HttpServer {
     given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
     val route =
-      path("") {
-        get {
-          complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Bridge Backend</h1>"))
-        }
-      }
+      concat(
+        pathPrefix("session") {
+          concat(
+            path("heartbeat") {
+              post {
+                complete("ok")
+              }
+            },
+            path("find") {
+              get {
+                complete("ok")
+              }
+            },
+            pathPrefix("lobby") {
+              concat(
+                path("create") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("join") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("leave") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("info") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("ready") {
+                  post {
+                    complete("ok")
+                  }
+                },
+              )
+            },
+            pathPrefix("game") {
+              concat(
+                path("info") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("play") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("pass") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("double") {
+                  post {
+                    complete("ok")
+                  }
+                },
+                path("bid") {
+                  post {
+                    complete("ok")
+                  }
+                },
+              )
+            },
+          )
+        },
+      )
 
     Http().newServerAt("localhost", 8000).bind(route)
 
