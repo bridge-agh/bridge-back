@@ -1,3 +1,5 @@
+package agh.bridge.back
+
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import munit.FunSuite
 import scala.concurrent.Future
@@ -6,9 +8,10 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
 
-given ExecutionContext = scala.concurrent.ExecutionContext.global
-
 class BackendSuite extends FunSuite {
+  given ExecutionContext = scala.concurrent.ExecutionContext.global
+  given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+
   val backendTestKit = FunFixture(
       _ => {
         val testKit = ActorTestKit()
