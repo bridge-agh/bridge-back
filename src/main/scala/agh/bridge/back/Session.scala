@@ -12,15 +12,17 @@ object Session {
   type Id = String
 
   sealed trait Command
-  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull.type, Unit]]) extends Command
-  final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Either[UserNotInSession.type, Unit]]) extends Command
+  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[AddUserError, Unit]]) extends Command
+  final case class RemoveUser(user: User.Actor) extends Command
   final case class GetLobbyInfo(replyTo: ActorRef[LobbyInfo]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
 
-  case object SessionFull
-  case object UserNotInSession
   final case class Player(id: User.Id, ready: Boolean, position: Int)
   final case class LobbyInfo(host: User.Id, users: List[Player], started: Boolean)
+
+  case object SessionFull
+
+  type AddUserError = SessionFull.type
 
   def apply(id: Id): Behavior[Command] = session(id, List.empty)
 
@@ -40,15 +42,7 @@ object Session {
             Behaviors.same
           }
 
-        case RemoveUser(user, replyTo) =>
-          val newUsers = users.filterNot(_ == user)
-          if (newUsers.length < users.length) {
-            replyTo ! Right(())
-            session(id, newUsers)
-          } else {
-            replyTo ! Left(UserNotInSession)
-            Behaviors.same
-          }
+        case RemoveUser(user) => session(id, users filterNot(_ == user))
 
         case GetLobbyInfo(replyTo) =>
           val started = false
@@ -57,15 +51,9 @@ object Session {
           val idsFut = Future.sequence(users map { user =>
             user.ask[User.Id](User.GetId(_))
           })
-          val readyEitherFut =  Future.sequence(users map { user =>
-            user.ask[Either[UserNotInSession.type, Boolean]](User.GetReady(_))
+          val readyFut =  Future.sequence(users map { user =>
+            user.ask[Boolean](User.GetReady(_))
           })
-          val readyFut = readyEitherFut flatMap { readyEither =>
-            Future.sequence(readyEither map {
-              case Right(ready) => Future.successful(ready)
-              case Left(_) => Future.failed(new Exception("User should be in session"))
-            })
-          }
           val playersFut = for {
             ids <- idsFut
             ready <- readyFut

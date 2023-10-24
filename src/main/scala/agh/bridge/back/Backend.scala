@@ -16,14 +16,15 @@ object Backend {
   final case class FindSession(userId: User.Id, replyTo: ActorRef[Option[Session.Id]]) extends Command
 
   final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends Command
-  final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[Either[Session.SessionFull.type, Unit]]) extends Command
-  final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Either[Session.UserNotInSession.type, Unit]]) extends Command
+  final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[Either[User.JoinSessionError, Unit]]) extends Command
+  final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Session.LobbyInfo]) extends Command
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Unit]) extends Command
 
-  def apply(users: Map[User.Id, User.Actor] = Map.empty,
-            sessions: Map[Session.Id, Session.Actor] = Map.empty,
-           ): Behavior[Command] = Behaviors.setup { context =>
+  def apply(
+    users: Map[User.Id, User.Actor] = Map.empty,
+    sessions: Map[Session.Id, Session.Actor] = Map.empty,
+  ): Behavior[Command] = Behaviors.setup { context =>
     given ActorSystem[_] = context.system
     given ExecutionContext = context.executionContext
     given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -49,7 +50,7 @@ object Backend {
         val host = context.spawn(User(hostId), s"user-$hostId")
         val sessionId = java.util.UUID.randomUUID.toString
         val session = context.spawn(Session(sessionId), s"session-$sessionId")
-        val joinedFut = host.ask[Either[Session.SessionFull.type, Unit]](User.JoinSession(session, _))
+        val joinedFut = host.ask[Either[User.JoinSessionError, Unit]](User.JoinSession(session, _))
         val x = joinedFut flatMap {
           case Right(_) => Future.successful(sessionId)
           case _ => Future.failed(new Exception("User should be able to join session they just created"))
