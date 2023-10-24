@@ -7,14 +7,6 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
 
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-
-import spray.json.DefaultJsonProtocol._
-import spray.json.RootJsonFormat
-
 object User {
   type Actor = ActorRef[Command]
   type Id = String
