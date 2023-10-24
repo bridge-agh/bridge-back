@@ -25,6 +25,7 @@ object User {
   final case class SetReady(ready: Boolean) extends Command
   final case class GetReady(replyTo: ActorRef[Boolean]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
+  final case class GetSession(replyTo: ActorRef[Option[Session.Actor]]) extends Command
 
   sealed trait JoinResult extends Command
   case object Joined extends JoinResult
@@ -41,6 +42,9 @@ object User {
         case GetId(replyTo) =>
           replyTo ! id
           Behaviors.same
+        case GetSession(replyTo) =>
+          replyTo ! None
+          Behaviors.same
         case _ => Behaviors.unhandled
       }
     }
@@ -55,6 +59,9 @@ object User {
         unjoined(id)
       case GetId(replyTo) =>
         replyTo ! id
+        Behaviors.same
+      case GetSession(replyTo) =>
+        replyTo ! None
         Behaviors.same
       case _ => Behaviors.unhandled
     }
@@ -71,6 +78,9 @@ object User {
       case GetId(replyTo) =>
         replyTo ! id
         Behaviors.same
+      case GetSession(replyTo) =>
+        replyTo ! Some(session)
+        Behaviors.same
       case _ => Behaviors.unhandled
     }
 }
@@ -82,6 +92,7 @@ object Session {
   sealed trait Command
   final case class Join(user: User.Actor, replyTo: ActorRef[User.JoinResult]) extends Command
   final case class GetLobbyInfo(replyTo: ActorRef[LobbyInfo]) extends Command
+  final case class GetId(replyTo: ActorRef[Id]) extends Command
 
   final case class Player(id: User.Id, ready: Boolean, position: Int)
   final case class LobbyInfo(host: User.Id, users: List[Player], started: Boolean)
@@ -123,6 +134,9 @@ object Session {
           } yield LobbyInfo(hostId, players, started)
           info map (replyTo ! _)
           Behaviors.same
+        case GetId(replyTo) =>
+          replyTo ! id
+          Behaviors.same
       }
     }
 }
@@ -131,15 +145,15 @@ object Backend {
   type Actor = ActorRef[Command]
 
   sealed trait Command
-  
-  final case class Heartbeat(userId: User.Id) extends Command
+
+  final case class Heartbeat(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
   final case class FindSession(userId: User.Id, replyTo: ActorRef[Option[Session.Id]]) extends Command
 
   final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends Command
-  final case class JoinLobby(sessionId: Session.Id, userId: User.Id) extends Command
-  final case class LeaveLobby(userId: User.Id) extends Command
+  final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[User.JoinResult]) extends Command
+  final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Session.LobbyInfo]) extends Command
-  final case class SetUserReady(userId: User.Id, ready: Boolean) extends Command
+  final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Unit]) extends Command
 
   def apply(users: Map[User.Id, User.Actor] = Map.empty,
             sessions: Map[Session.Id, Session.Actor] = Map.empty,
@@ -147,29 +161,45 @@ object Backend {
     given ActorSystem[_] = context.system
     given ExecutionContext = context.executionContext
     Behaviors.receiveMessage {
-      case Heartbeat(userId) =>
-        Behaviors.same
+
+      case Heartbeat(userId, replyTo) =>
+        Behaviors.unhandled
+
       case FindSession(userId, replyTo) =>
-        val user = users.get(userId)
+        val userOptFut = Future.successful(users.get(userId))
+        val sessionOptFut = userOptFut flatMap {
+          case Some(user) => user.ask[Option[Session.Actor]](User.GetSession(_))
+          case None => Future.successful(None)
+        }
+        val sessionIdOptFut = sessionOptFut flatMap {
+          case Some(session) => session.ask[Session.Id](Session.GetId(_)) map Some.apply
+          case None => Future.successful(None)
+        }
+        sessionIdOptFut.map (replyTo ! _)
         Behaviors.same
+
       case CreateLobby(hostId, replyTo) =>
-        val host = context.spawn(User(hostId), "")
+        val host = context.spawn(User(hostId), s"user-$hostId")
         val sessionId = java.util.UUID.randomUUID.toString
-        val session = context.spawn(Session(sessionId), "")
+        val session = context.spawn(Session(sessionId), s"session-$sessionId")
         val joinFuture = host.ask[User.JoinResult](User.Join(session, _))
         replyTo ! sessionId
         apply(
           users + (hostId -> host),
           sessions + (sessionId -> session),
         )
-      case JoinLobby(sessionId, userId) =>
-        Behaviors.same
-      case LeaveLobby(userId) =>
-        Behaviors.same
+
+      case JoinLobby(sessionId, userId, replyTo) =>
+        Behaviors.unhandled
+
+      case LeaveLobby(userId, replyTo) =>
+        Behaviors.unhandled
+
       case GetLobbyInfo(sessionId, replyTo) =>
-        Behaviors.same
-      case SetUserReady(userId, ready) =>
-        Behaviors.same
+        Behaviors.unhandled
+
+      case SetUserReady(userId, ready, replyTo) =>
+        Behaviors.unhandled
     }
   }
 }
@@ -234,8 +264,7 @@ object HttpServer {
             path("heartbeat") {
               post {
                 entity(as[HeartbeatRequest]) { request =>
-                  backend ! Backend.Heartbeat(request.userId)
-                  complete(StatusCodes.OK)
+                  complete(StatusCodes.NotImplemented)
                 }
               }
             },
@@ -260,16 +289,14 @@ object HttpServer {
                 path("join") {
                   post {
                     entity(as[JoinLobbyRequest]) { request =>
-                      backend ! Backend.JoinLobby(request.sessionId, request.userId)
-                      complete(StatusCodes.OK)
+                      complete(StatusCodes.NotImplemented)
                     }
                   }
                 },
                 path("leave") {
                   post {
                     entity(as[LeaveLobbyRequest]) { request =>
-                      backend ! Backend.LeaveLobby(request.userId)
-                      complete(StatusCodes.OK)
+                      complete(StatusCodes.NotImplemented)
                     }
                   }
                 },
@@ -288,8 +315,7 @@ object HttpServer {
                 path("ready") {
                   post {
                     entity(as[SetUserReadyRequest]) { request =>
-                      backend ! Backend.SetUserReady(request.userId, request.ready)
-                      complete(StatusCodes.OK)
+                      complete(StatusCodes.NotImplemented)
                     }
                   }
                 },
