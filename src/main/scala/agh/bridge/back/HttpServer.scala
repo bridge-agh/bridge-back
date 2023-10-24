@@ -115,8 +115,12 @@ object HttpServer {
                 path("info") {
                   get {
                     parameter("sessionId".as[Session.Id]) { sessionId =>
-                      val fInfo = backend.ask[Session.LobbyInfo](Backend.GetLobbyInfo(sessionId, _))
-                      complete(fInfo map { info => GetLobbyInfoResponse(
+                      val infoOptFut = backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+                      val infoFut = infoOptFut flatMap {
+                        case Some(info) => Future.successful(info)
+                        case None => Future.failed(new Exception("Session not found"))
+                      }
+                      complete(infoFut map { info => GetLobbyInfoResponse(
                         info.host,
                         info.users map { user => PlayerModel(user.id, user.ready, user.position) },
                         info.started,

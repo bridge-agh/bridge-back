@@ -43,4 +43,15 @@ class BackendSuite extends FunSuite {
     yield
       assertEquals(foundSessionId, Some(sessionId))
   }
+
+  backendTestKit.test("join lobby") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    val hostId = "host"
+    val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(hostId, _))
+    for
+      sessionId <- sessionIdFut
+      joinResult <- backend.ask[Either[Backend.JoinLobbyError, Unit]](Backend.JoinLobby(sessionId, "guest", _))
+    yield
+      assertEquals(joinResult, Right(()))
+  }
 }

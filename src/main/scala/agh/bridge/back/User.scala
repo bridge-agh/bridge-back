@@ -12,8 +12,9 @@ object User {
   type Id = String
 
   sealed trait Command
+  case object Heartbeat extends Command
   final case class JoinSession(session: Session.Actor, replyTo: ActorRef[Either[JoinSessionError, Unit]]) extends Command
-  final case class LeaveSession(replyTo: ActorRef[Unit]) extends Command
+  case object LeaveSession extends Command
   final case class SetReady(ready: Boolean, replyTo: ActorRef[Either[SetReadyError, Unit]]) extends Command
   final case class GetReady(replyTo: ActorRef[Boolean]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
@@ -35,13 +36,15 @@ object User {
     Behaviors.setup { context =>
       Behaviors.receiveMessage {
 
+        case Heartbeat =>
+          Behaviors.same
+
         case JoinSession(session, replyTo) =>
           val adapter = context.messageAdapter[Either[AddUserError, Unit]](SessionAddUserResponseWrapper.apply)
           session ! Session.AddUser(context.self, adapter)
           joining(id, session, replyTo)
 
-        case LeaveSession(replyTo) =>
-          replyTo ! ()
+        case LeaveSession =>
           Behaviors.same
 
         case SetReady(_, replyTo) =>
@@ -69,14 +72,16 @@ object User {
     Behaviors.setup { context =>
       Behaviors.receiveMessage {
 
+        case Heartbeat =>
+          Behaviors.same
+
         case JoinSession(session, replyTo) =>
           replyTo ! Left(UserAlreadyInSession)
           Behaviors.same
 
-        case LeaveSession(replyTo) =>
+        case LeaveSession=>
           session ! Session.RemoveUser(context.self)
-          replyTo ! ()
-          Behaviors.same
+          unjoined(id)
 
         case SetReady(_, replyTo) =>
           replyTo ! Left(UserNotInSession)
@@ -107,11 +112,14 @@ object User {
     Behaviors.setup { context =>
       Behaviors.receiveMessage {
 
+        case Heartbeat =>
+          Behaviors.same
+
         case JoinSession(session, replyTo) =>
           replyTo ! Left(UserAlreadyInSession)
           Behaviors.same
 
-        case LeaveSession(replyTo) =>
+        case LeaveSession =>
           session ! Session.RemoveUser(context.self)
           unjoined(id)
 
