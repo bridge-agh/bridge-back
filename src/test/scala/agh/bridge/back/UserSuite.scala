@@ -1,3 +1,5 @@
+package agh.bridge.back
+
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
 import munit.FunSuite
 import scala.concurrent.Future
