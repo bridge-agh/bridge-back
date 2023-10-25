@@ -31,7 +31,6 @@ lazy val root = project
       
       "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
       "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-caching" % akkaHttpVersion,
 
       "ch.qos.logback"    % "logback-classic"           % "1.2.11",
 

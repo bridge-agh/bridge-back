@@ -24,7 +24,7 @@ object HttpServer {
 
   // GET /session/find
 
-  private final case class FindSessionResponse(sessionId: Option[Session.Id])
+  private final case class FindSessionResponse(sessionId: Session.Id)
   private given RootJsonFormat[FindSessionResponse] = jsonFormat1(FindSessionResponse.apply)
 
   // POST /session/lobby/create
@@ -76,15 +76,19 @@ object HttpServer {
             path("heartbeat") {
               post {
                 entity(as[HeartbeatRequest]) { request =>
-                  complete(StatusCodes.NotImplemented)
+                  backend ! Backend.Heartbeat(request.userId)
+                  complete(StatusCodes.OK)
                 }
               }
             },
             path("find") {
               get {
                 parameter("userId".as[User.Id]) { userId =>
-                  val session = backend.ask[Option[Session.Id]](Backend.FindSession(userId, _))
-                  complete(session map (FindSessionResponse(_)))
+                  val sessionIdOptFut = backend.ask[Option[Session.Id]](Backend.FindSession(userId, _))
+                  onSuccess(sessionIdOptFut) {
+                    case Some(sessionId) => complete(FindSessionResponse(sessionId))
+                    case None => complete(StatusCodes.NotFound)
+                  }
                 }
               }
             },
@@ -93,22 +97,29 @@ object HttpServer {
                 path("create") {
                   post {
                     entity(as[CreateLobbyRequest]) { request =>
-                      val session = backend.ask[Session.Id](Backend.CreateLobby(request.hostId, _))
-                      complete(session map (CreateLobbyResponse(_)))
+                      val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(request.hostId, _))
+                      complete(sessionIdFut map (CreateLobbyResponse(_)))
                     }
                   }
                 },
                 path("join") {
                   post {
                     entity(as[JoinLobbyRequest]) { request =>
-                      complete(StatusCodes.NotImplemented)
+                      val resFut = backend.ask[Either[Backend.JoinLobbyError, Unit]](Backend.JoinLobby(request.sessionId, request.userId, _))
+                      complete(resFut map {
+                        case Left(Backend.SessionNotFound) => StatusCodes.NotFound
+                        case Left(Session.SessionFull) => StatusCodes.Conflict
+                        case Left(User.UserAlreadyInSession) => StatusCodes.Conflict
+                        case Right(_) => StatusCodes.OK
+                      })
                     }
                   }
                 },
                 path("leave") {
                   post {
                     entity(as[LeaveLobbyRequest]) { request =>
-                      complete(StatusCodes.NotImplemented)
+                      backend ! Backend.LeaveLobby(request.userId)
+                      complete(StatusCodes.OK)
                     }
                   }
                 },
@@ -116,22 +127,25 @@ object HttpServer {
                   get {
                     parameter("sessionId".as[Session.Id]) { sessionId =>
                       val infoOptFut = backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
-                      val infoFut = infoOptFut flatMap {
-                        case Some(info) => Future.successful(info)
-                        case None => Future.failed(new Exception("Session not found"))
+                      onSuccess(infoOptFut) {
+                        case Some(info) => complete(GetLobbyInfoResponse(
+                          info.host,
+                          info.users map { user => PlayerModel(user.id, user.ready, user.position) },
+                          info.started,
+                        ))
+                        case None => complete(StatusCodes.NotFound)
                       }
-                      complete(infoFut map { info => GetLobbyInfoResponse(
-                        info.host,
-                        info.users map { user => PlayerModel(user.id, user.ready, user.position) },
-                        info.started,
-                      )})
                     }
                   }
                 },
                 path("ready") {
                   post {
                     entity(as[SetUserReadyRequest]) { request =>
-                      complete(StatusCodes.NotImplemented)
+                      val resFut = backend.ask[Either[User.SetReadyError, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
+                      complete(resFut map {
+                        case Left(User.UserNotInSession) => StatusCodes.Conflict
+                        case Right(_) => StatusCodes.OK
+                      })
                     }
                   }
                 },
