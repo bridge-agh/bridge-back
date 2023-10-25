@@ -84,10 +84,10 @@ object HttpServer {
             path("find") {
               get {
                 parameter("userId".as[User.Id]) { userId =>
-                  val sessionIdOptFut = backend.ask[Option[Session.Id]](Backend.FindSession(userId, _))
+                  val sessionIdOptFut = backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession(userId, _))
                   onSuccess(sessionIdOptFut) {
-                    case Some(sessionId) => complete(FindSessionResponse(sessionId))
-                    case None => complete(StatusCodes.NotFound)
+                    case Right(sessionId) => complete(FindSessionResponse(sessionId))
+                    case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
                   }
                 }
               }
@@ -98,18 +98,17 @@ object HttpServer {
                   post {
                     entity(as[CreateLobbyRequest]) { request =>
                       val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(request.hostId, _))
-                      complete(sessionIdFut map (CreateLobbyResponse(_)))
+                      complete(sessionIdFut map CreateLobbyResponse.apply)
                     }
                   }
                 },
                 path("join") {
                   post {
                     entity(as[JoinLobbyRequest]) { request =>
-                      val resFut = backend.ask[Either[Backend.JoinLobbyError, Unit]](Backend.JoinLobby(request.sessionId, request.userId, _))
+                      val resFut = backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(request.sessionId, request.userId, _))
                       complete(resFut map {
                         case Left(Backend.SessionNotFound) => StatusCodes.NotFound
                         case Left(Session.SessionFull) => StatusCodes.Conflict
-                        case Left(User.UserAlreadyInSession) => StatusCodes.Conflict
                         case Right(_) => StatusCodes.OK
                       })
                     }
@@ -118,22 +117,22 @@ object HttpServer {
                 path("leave") {
                   post {
                     entity(as[LeaveLobbyRequest]) { request =>
-                      backend ! Backend.LeaveLobby(request.userId)
-                      complete(StatusCodes.OK)
+                      val resFut = backend.ask[Unit](Backend.LeaveLobby(request.userId, _))
+                      complete(resFut map (_ => StatusCodes.OK))
                     }
                   }
                 },
                 path("info") {
                   get {
                     parameter("sessionId".as[Session.Id]) { sessionId =>
-                      val infoOptFut = backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+                      val infoOptFut = backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
                       onSuccess(infoOptFut) {
-                        case Some(info) => complete(GetLobbyInfoResponse(
+                        case Right(info) => complete(GetLobbyInfoResponse(
                           info.host,
                           info.users map { user => PlayerModel(user.id, user.ready, user.position) },
                           info.started,
                         ))
-                        case None => complete(StatusCodes.NotFound)
+                        case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
                       }
                     }
                   }
@@ -141,10 +140,10 @@ object HttpServer {
                 path("ready") {
                   post {
                     entity(as[SetUserReadyRequest]) { request =>
-                      val resFut = backend.ask[Either[User.SetReadyError, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
+                      val resFut = backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
                       complete(resFut map {
+                        case Right(()) => StatusCodes.OK
                         case Left(User.UserNotInSession) => StatusCodes.Conflict
-                        case Right(_) => StatusCodes.OK
                       })
                     }
                   }

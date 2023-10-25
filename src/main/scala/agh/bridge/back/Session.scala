@@ -11,18 +11,17 @@ object Session {
   type Actor = ActorRef[Command]
   type Id = String
 
+  case object SessionFull
+  type SessionFull = SessionFull.type
+
   sealed trait Command
-  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[AddUserError, Unit]]) extends Command
-  final case class RemoveUser(user: User.Actor) extends Command
+  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends Command
+  final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(replyTo: ActorRef[LobbyInfo]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
 
   final case class Player(id: User.Id, ready: Boolean, position: Int)
   final case class LobbyInfo(host: User.Id, users: List[Player], started: Boolean)
-
-  case object SessionFull
-
-  type AddUserError = SessionFull.type
 
   def apply(id: Id): Behavior[Command] = session(id, List.empty)
 
@@ -31,20 +30,31 @@ object Session {
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
       given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+      context.setLoggerName(s"agh.bridge.back.Session-$id")
       Behaviors.receiveMessage {
 
+        case AddUser(user, replyTo) if users.length < 4 =>
+          context.log.debug("[session] AddUser({})", user)
+          replyTo ! Right(())
+          session(id, users :+ user)
+          
         case AddUser(user, replyTo) =>
-          if (users.length < 4) {
-            replyTo ! Right(())
-            session(id, users :+ user)
-          } else {
-            replyTo ! Left(SessionFull)
-            Behaviors.same
-          }
+          context.log.debug("[session] AddUser({}) - session full", user)
+          replyTo ! Left(SessionFull)
+          Behaviors.same
 
-        case RemoveUser(user) => session(id, users filterNot(_ == user))
+        case RemoveUser(user, replyTo) if users.length > 1 =>
+          context.log.debug("[session] RemoveUser({})", user)
+          replyTo ! ()
+          session(id, users filterNot(_ == user))
+
+        case RemoveUser(user, replyTo) =>
+          context.log.debug("[session] RemoveUser({}) - last user", user)
+          replyTo ! ()
+          Behaviors.stopped
 
         case GetLobbyInfo(replyTo) =>
+          context.log.debug("[session] GetLobbyInfo")
           val started = false
           val host = users.head
           val hostIdFut = host.ask[User.Id](User.GetId(_))
@@ -68,6 +78,7 @@ object Session {
           Behaviors.same
 
         case GetId(replyTo) =>
+          context.log.debug("[session] GetId")
           replyTo ! id
           Behaviors.same
       }

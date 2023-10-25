@@ -32,7 +32,7 @@ lazy val root = project
       "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
       "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
 
-      "ch.qos.logback"    % "logback-classic"           % "1.2.11",
+      "ch.qos.logback"    % "logback-classic"           % "1.2.12",
 
       "me.shadaj" %% "scalapy-core" % "0.5.2",
     ),
