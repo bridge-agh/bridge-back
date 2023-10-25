@@ -75,7 +75,6 @@ object Session {
 
         case GetLobbyInfo(replyTo) =>
           context.log.debug("[session] GetLobbyInfo")
-          val started = false
           val host = users.head
           val hostIdFut = host.ask[User.Id](User.GetId(_))
           val idsFut = Future.sequence(users map { user =>
@@ -94,9 +93,13 @@ object Session {
           } yield ids.zip(ready).zip(position).map { case ((id, ready), position) =>
             Player(id, ready, position.right.get)
           }
+          val startedFut = readyFut map { ready =>
+            ready.length == 4 && ready.forall(identity)
+          }
           val info = for {
             hostId <- hostIdFut
             players <- playersFut
+            started <- startedFut
           } yield LobbyInfo(hostId, players, started)
           info map (replyTo ! _)
           Behaviors.same

@@ -157,4 +157,65 @@ class BackendSuite extends FunSuite {
         )
       ))
   }
+
+  backendTestKit.test("game starts") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
+      joinRes1 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u2", _))
+      joinRes2 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u3", _))
+      leaveRes1 <- backend.ask[Unit](Backend.LeaveLobby("u2", _))
+      joinRes3 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u4", _))
+      joinRes4 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u5", _))
+      infoOpt1 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+      readyRes1 <- backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady("u1", true, _))
+      readyRes2 <- backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady("u3", true, _))
+      readyRes3 <- backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady("u4", true, _))
+      infoOpt2 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+      readyRes4 <- backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady("u5", true, _))
+      infoOpt3 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+    yield
+      assert(sessionId.nonEmpty)
+      assertEquals(joinRes1, Right(()))
+      assertEquals(joinRes2, Right(()))
+      assertEquals(leaveRes1, ())
+      assertEquals(joinRes3, Right(()))
+      assertEquals(joinRes4, Right(()))
+      assertEquals(infoOpt1, Right(
+        Session.LobbyInfo(
+          "u1",
+          List(
+            Session.Player("u1", false, PlayerDirection.North),
+            Session.Player("u3", false, PlayerDirection.South),
+            Session.Player("u4", false, PlayerDirection.East),
+            Session.Player("u5", false, PlayerDirection.West)
+          ),
+          false
+        )
+      ))
+      assertEquals(infoOpt2, Right(
+        Session.LobbyInfo(
+          "u1",
+          List(
+            Session.Player("u1", true, PlayerDirection.North),
+            Session.Player("u3", true, PlayerDirection.South),
+            Session.Player("u4", true, PlayerDirection.East),
+            Session.Player("u5", false, PlayerDirection.West)
+          ),
+          false
+        )
+      ))
+      assertEquals(infoOpt3, Right(
+        Session.LobbyInfo(
+          "u1",
+          List(
+            Session.Player("u1", true, PlayerDirection.North),
+            Session.Player("u3", true, PlayerDirection.South),
+            Session.Player("u4", true, PlayerDirection.East),
+            Session.Player("u5", true, PlayerDirection.West)
+          ),
+          true
+        )
+      ))
+  }
 }
