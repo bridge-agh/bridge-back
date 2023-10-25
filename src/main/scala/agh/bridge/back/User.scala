@@ -123,9 +123,9 @@ object User {
           session ! Session.RemoveUser(context.self)
           unjoined(id)
 
-        case SetReady(_, replyTo) =>
+        case SetReady(ready, replyTo) =>
           replyTo ! Right(())
-          joined(id, session, ready = true)
+          joined(id, session, ready = ready)
 
         case GetReady(replyTo) =>
           replyTo ! ready
