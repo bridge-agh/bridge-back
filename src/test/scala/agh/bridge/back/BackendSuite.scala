@@ -25,33 +25,47 @@ class BackendSuite extends FunSuite {
 
   backendTestKit.test("create lobby") { (testKit, backend) =>
     given ActorSystem[_] = testKit.system
-    val hostId = "host"
-    val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(hostId, _))
-    for 
-      sessionId <- sessionIdFut
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
+      infoOpt <- backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
     yield
       assertNotEquals(sessionId.length, 0)
+      assertEquals(infoOpt, Some(Session.LobbyInfo("host", List(Session.Player("host", false, 0)), false)))
   }
 
   backendTestKit.test("find session") { (testKit, backend) =>
     given ActorSystem[_] = testKit.system
-    val hostId = "host"
-    val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(hostId, _))
     for
-      sessionId <- sessionIdFut
-      foundSessionId <- backend.ask[Option[Session.Id]](Backend.FindSession(hostId, _))
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
+      foundSessionIdOpt <- backend.ask[Option[Session.Id]](Backend.FindSession("host", _))
     yield
-      assertEquals(foundSessionId, Some(sessionId))
+      assertEquals(foundSessionIdOpt, Some(sessionId))
   }
 
   backendTestKit.test("join lobby") { (testKit, backend) =>
     given ActorSystem[_] = testKit.system
-    val hostId = "host"
-    val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby(hostId, _))
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
+      joinResult <- backend.ask[Either[Backend.JoinLobbyError, Unit]](Backend.JoinLobby(sessionId, "guest", _))
+      infoOpt <- backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+    yield
+      assertEquals(joinResult, Right(()))
+      assertEquals(infoOpt, Some(Session.LobbyInfo("host", List(Session.Player("host", false, 0), Session.Player("guest", false, 1)), false)))
+  }
+
+  backendTestKit.test("leave lobby") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    val sessionIdFut = backend.ask[Session.Id](Backend.CreateLobby("host", _))
     for
       sessionId <- sessionIdFut
       joinResult <- backend.ask[Either[Backend.JoinLobbyError, Unit]](Backend.JoinLobby(sessionId, "guest", _))
     yield
       assertEquals(joinResult, Right(()))
+      backend ! Backend.LeaveLobby("guest")
+      Thread.sleep(50)
+      for
+        infoOpt <- backend.ask[Option[Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+      yield
+        assertEquals(infoOpt, Some(Session.LobbyInfo("host", List(Session.Player("host", false, 0)), false)))
   }
 }
