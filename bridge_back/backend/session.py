@@ -49,6 +49,7 @@ class Session:
         self.users[host_id].position = PlayerDirection.NORTH
         self.created = datetime.now()
         self.started = False
+        self.version = 0
 
     def join(self, user_id: UserId):
         if len(self.users) >= 4:

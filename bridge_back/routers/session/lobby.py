@@ -1,3 +1,4 @@
+from asyncio import Semaphore
 from typing import Optional
 
 from fastapi import APIRouter
@@ -8,7 +9,7 @@ from bridge_back.backend.session import PlayerDirection
 from bridge_back.backend.types import SessionId, UserId
 
 router = APIRouter(prefix="/lobby")
-
+semaphore = Semaphore()
 
 # --------------------------------- #
 
@@ -78,11 +79,14 @@ class GetInfoResponse(BaseModel):
     host_id: UserId
     users: list[Player]
     started: bool
+    version: int
 
 
 @router.get("/info")
 async def get_lobby_info(session_id: SessionId) -> GetInfoResponse:
     session = backend.session.get_session(session_id)
+    async with semaphore:
+        session.version += 1
     users = [Player(
         id=user.id,
         ready=user.ready,
@@ -93,6 +97,7 @@ async def get_lobby_info(session_id: SessionId) -> GetInfoResponse:
         host_id=session.host_id,
         users=users,
         started=session.started,
+        version=session.version
     )
 
 
@@ -107,8 +112,8 @@ class ForceSwapRequest(BaseModel):
 
 @router.post("/force-swap")
 async def force_swap(request: ForceSwapRequest):
-    backend.session.get_session(request.session_id).force_swap(request.first_position, request.second_position)
-
+    session = backend.session.get_session(request.session_id)
+    session.force_swap(request.first_position, request.second_position)
 
 # --------------------------------- #
 
