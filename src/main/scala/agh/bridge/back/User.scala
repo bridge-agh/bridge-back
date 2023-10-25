@@ -26,7 +26,8 @@ object User {
   final case class GetId(replyTo: ActorRef[Id]) extends Command
   final case class GetSession(replyTo: ActorRef[Option[Session.Actor]]) extends Command
 
-  final case class SessionAddUserResponse(session: Session.Actor, result: Either[SessionFull, Unit]) extends Command
+  private final case class SessionAddUserResponse(session: Session.Actor, result: Either[SessionFull, Unit]) extends Command
+  private case object SessionDied extends Command
 
   given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
@@ -44,23 +45,23 @@ object User {
           Behaviors.same
 
         case JoinSession(session, replyTo) =>
-          context.log.debug("[unjoined] JoinSession({})", session)
+          context.log.debug("[unjoined] JoinSession")
           val adapter = context.messageAdapter[Either[SessionFull, Unit]](SessionAddUserResponse(session, _))
           session ! Session.AddUser(context.self, adapter)
           joining(id, session, replyTo)
 
         case LeaveSession(replyTo) =>
-          context.log.debug("[unjoined] LeaveSession")
+          context.log.warn("[unjoined] LeaveSession")
           replyTo ! ()
           Behaviors.same
 
         case SetReady(ready, replyTo) =>
-          context.log.debug("[unjoined] SetReady({})", ready)
+          context.log.error("[unjoined] SetReady({})", ready)
           replyTo ! Left(UserNotInSession)
           Behaviors.same
 
         case GetReady(replyTo) =>
-          context.log.debug("[unjoined] GetReady")
+          context.log.warn("[unjoined] GetReady")
           replyTo ! false
           Behaviors.same
 
@@ -75,7 +76,11 @@ object User {
           Behaviors.same
 
         case SessionAddUserResponse(session, r) =>
-          context.log.error("[unjoined] SessionAddUserResponse({}, {})", session, r)
+          context.log.error("[unjoined] SessionAddUserResponse")
+          Behaviors.unhandled
+
+        case SessionDied =>
+          context.log.error("[unjoined] SessionDied")
           Behaviors.unhandled
       }
     }
@@ -83,6 +88,7 @@ object User {
   private def joining(id: Id, targetSession: Session.Actor, initiator: ActorRef[Either[SessionFull, Unit]]): Behavior[Command] =
     Behaviors.withStash(32) { buffer =>
       Behaviors.setup { context =>
+        context.watchWith(targetSession, SessionDied)
         Behaviors.receiveMessage {
 
           case Heartbeat =>
@@ -90,7 +96,7 @@ object User {
             Behaviors.same
 
           case JoinSession(session, replyTo) =>
-            context.log.debug("[joining] JoinSession({}): stashing", session)
+            context.log.debug("[joining] JoinSession: stashing")
             buffer.stash(JoinSession(session, replyTo))
             Behaviors.same
 
@@ -105,7 +111,7 @@ object User {
             Behaviors.same
 
           case GetReady(replyTo) =>
-            context.log.debug("[joining] GetReady")
+            context.log.warn("[joining] GetReady")
             replyTo ! false
             Behaviors.same
 
@@ -127,11 +133,16 @@ object User {
           case SessionAddUserResponse(newSession, Left(SessionFull)) if newSession == targetSession =>
             context.log.debug("[joining] SessionAddUserResponse: session full")
             initiator ! Left(SessionFull)
+            context.unwatch(targetSession)
             buffer.unstashAll(unjoined(id))
 
           case SessionAddUserResponse(_, _) =>
             context.log.error("[joining] SessionAddUserResponse: wrong session")
             Behaviors.unhandled
+
+          case SessionDied =>
+            context.log.error("[joining] SessionDied")
+            buffer.unstashAll(unjoined(id))
         }
       }
     }
@@ -147,16 +158,18 @@ object User {
           Behaviors.same
 
         case JoinSession(session, replyTo) =>
-          context.log.debug("[joined] JoinSession({}): leaving old session", session)
+          context.log.debug("[joined] JoinSession: leaving old session")
           val removedFut = currentSession.ask[Unit](Session.RemoveUser(context.self, _))
           val adapter = context.messageAdapter[Either[SessionFull, Unit]](SessionAddUserResponse(session, _))
           removedFut.map(_ => session ! Session.AddUser(context.self, adapter))
+          context.unwatch(currentSession)
           joining(id, session, replyTo)
 
         case LeaveSession(replyTo) =>
           context.log.debug("[joined] LeaveSession: leaving session")
           val removedFut = currentSession.ask[Unit](Session.RemoveUser(context.self, _))
           removedFut.map(_ => replyTo ! ())
+          context.unwatch(currentSession)
           unjoined(id)
 
         case SetReady(ready, replyTo) =>
@@ -182,6 +195,10 @@ object User {
         case SessionAddUserResponse(_, _) =>
           context.log.error("[joined] SessionAddUserResponse")
           Behaviors.unhandled
+
+        case SessionDied =>
+          context.log.error("[joined] SessionDied")
+          unjoined(id)
       }
     }
 }

@@ -23,6 +23,8 @@ object Session {
   final case class Player(id: User.Id, ready: Boolean, position: Int)
   final case class LobbyInfo(host: User.Id, users: List[Player], started: Boolean)
 
+  private final case class UserDied(user: User.Actor) extends Command
+
   def apply(id: Id): Behavior[Command] = session(id, List.empty)
 
   private def session(id: Id, users: List[User.Actor]): Behavior[Command] =
@@ -34,24 +36,32 @@ object Session {
       Behaviors.receiveMessage {
 
         case AddUser(user, replyTo) if users.length < 4 =>
-          context.log.debug("[session] AddUser({})", user)
+          context.log.debug("[session] AddUser")
           replyTo ! Right(())
+          context.watchWith(user, UserDied(user))
           session(id, users :+ user)
           
         case AddUser(user, replyTo) =>
-          context.log.debug("[session] AddUser({}) - session full", user)
+          context.log.debug("[session] AddUser - session full")
           replyTo ! Left(SessionFull)
           Behaviors.same
 
-        case RemoveUser(user, replyTo) if users.length > 1 =>
-          context.log.debug("[session] RemoveUser({})", user)
+        case RemoveUser(user, replyTo) if users.contains(user) && users.length > 1 =>
+          context.log.debug("[session] RemoveUser")
           replyTo ! ()
+          context.unwatch(user)
           session(id, users filterNot(_ == user))
 
-        case RemoveUser(user, replyTo) =>
-          context.log.debug("[session] RemoveUser({}) - last user", user)
+        case RemoveUser(user, replyTo) if users.contains(user) =>
+          context.log.debug("[session] RemoveUser - last user")
           replyTo ! ()
+          context.unwatch(user)
           Behaviors.stopped
+
+        case RemoveUser(user, replyTo) =>
+          context.log.warn("[session] RemoveUser - user not in session")
+          replyTo ! ()
+          Behaviors.same
 
         case GetLobbyInfo(replyTo) =>
           context.log.debug("[session] GetLobbyInfo")
@@ -81,6 +91,18 @@ object Session {
           context.log.debug("[session] GetId")
           replyTo ! id
           Behaviors.same
+
+        case UserDied(user) if users.contains(user) && users.length > 1 =>
+          context.log.error("[session] UserDied")
+          session(id, users filterNot(_ == user))
+
+        case UserDied(user) if users.contains(user) =>
+          context.log.error("[session] UserDied - last user")
+          Behaviors.stopped
+
+        case UserDied(user) =>
+          context.log.error("[session] UserDied - user not in session")
+          Behaviors.unhandled
       }
     }
 }

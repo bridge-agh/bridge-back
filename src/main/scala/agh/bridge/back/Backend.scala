@@ -34,15 +34,15 @@ object Backend {
     result: Either[SessionFull, Unit]
   ) extends Command
 
-  private final case class UserStopped(userId: User.Id) extends Command
-  private final case class SessionStopped(sessionId: Session.Id) extends Command
+  private final case class UserDied(userId: User.Id) extends Command
+  private final case class SessionDied(sessionId: Session.Id) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.setLoggerName("agh.bridge.back.Backend")
     val users: Map[User.Id, User.Actor] =
       Map.empty.withDefault { id => 
         var user = context.spawn(User(id), s"user-$id") 
-        context.watchWith(user, UserStopped(id))
+        context.watchWith(user, UserDied(id))
         user
       }
     val sessions: Map[Session.Id, Session.Actor] = Map.empty
@@ -83,7 +83,7 @@ object Backend {
         val host = users(hostId)
         val sessionId = java.util.UUID.randomUUID.toString
         val session = context.spawn(Session(sessionId), s"session-$sessionId")
-        context.watchWith(session, SessionStopped(sessionId))
+        context.watchWith(session, SessionDied(sessionId))
         val adapter = context.messageAdapter[Either[SessionFull, Unit]](
           HostJoinSessionResponse(sessionId, session, replyTo, _))
         host ! User.JoinSession(session, adapter)
@@ -135,12 +135,12 @@ object Backend {
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
 
-      case UserStopped(userId) =>
-        context.log.debug("[backend] UserStopped({})", userId)
+      case UserDied(userId) =>
+        context.log.debug("[backend] UserDied({})", userId)
         backend(users - userId, sessions)
 
-      case SessionStopped(sessionId) =>
-        context.log.debug("[backend] SessionStopped({})", sessionId)
+      case SessionDied(sessionId) =>
+        context.log.debug("[backend] SessionDied({})", sessionId)
         backend(users, sessions - sessionId)
     }
   }
