@@ -101,6 +101,21 @@ class BackendSuite extends FunSuite {
       assertEquals(infoOpt2, Right(Session.LobbyInfo("host", List(Session.Player("host", false, 0)), false)))
   }
 
+  backendTestKit.test("join lobby when in lobby") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId1 <- backend.ask[Session.Id](Backend.CreateLobby("user1", _))
+      sessionId2 <- backend.ask[Session.Id](Backend.CreateLobby("user2", _))
+      joinRes <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId2, "user1", _))
+      foundSessionId <- backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession("user1", _))
+      infoOpt1 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId1, _))
+      infoOpt2 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId2, _))
+    yield
+      assertEquals(foundSessionId, Right(sessionId2))
+      assertEquals(infoOpt1, Left(Backend.SessionNotFound))
+      assertEquals(infoOpt2, Right(Session.LobbyInfo("user2", List(Session.Player("user2", false, 0), Session.Player("user1", false, 1)), false)))
+  }
+
   backendTestKit.test("session deletes when all leave") { (testKit, backend) =>
     given ActorSystem[_] = testKit.system
     for
