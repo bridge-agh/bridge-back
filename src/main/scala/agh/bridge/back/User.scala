@@ -8,6 +8,8 @@ import akka.actor.typed.scaladsl.StashBuffer
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 
+import agh.bridge.core.PlayerDirection
+
 object User {
   type Actor = ActorRef[Command]
   type Id = String
@@ -23,10 +25,11 @@ object User {
   final case class LeaveSession(replyTo: ActorRef[Unit]) extends Command
   final case class SetReady(ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
   final case class GetReady(replyTo: ActorRef[Boolean]) extends Command
+  final case class GetDirection(replyTo: ActorRef[Either[UserNotInSession, PlayerDirection]]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
   final case class GetSession(replyTo: ActorRef[Option[Session.Actor]]) extends Command
 
-  private final case class SessionAddUserResponse(session: Session.Actor, result: Either[SessionFull, Unit]) extends Command
+  private final case class SessionAddUserResponse(session: Session.Actor, result: Either[SessionFull, PlayerDirection]) extends Command
   private case object SessionDied extends Command
 
   given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -46,7 +49,7 @@ object User {
 
         case JoinSession(session, replyTo) =>
           context.log.debug("[unjoined] JoinSession")
-          val adapter = context.messageAdapter[Either[SessionFull, Unit]](SessionAddUserResponse(session, _))
+          val adapter = context.messageAdapter[Either[SessionFull, PlayerDirection]](SessionAddUserResponse(session, _))
           session ! Session.AddUser(context.self, adapter)
           joining(id, session, replyTo)
 
@@ -63,6 +66,11 @@ object User {
         case GetReady(replyTo) =>
           context.log.warn("[unjoined] GetReady")
           replyTo ! false
+          Behaviors.same
+
+        case GetDirection(replyTo) =>
+          context.log.error("[unjoined] GetDirection")
+          replyTo ! Left(UserNotInSession)
           Behaviors.same
 
         case GetId(replyTo) =>
@@ -115,6 +123,11 @@ object User {
             replyTo ! false
             Behaviors.same
 
+          case GetDirection(replyTo) =>
+            context.log.error("[joining] GetDirection")
+            replyTo ! Left(UserNotInSession)
+            Behaviors.same
+
           case GetId(replyTo) =>
             context.log.debug("[joining] GetId")
             replyTo ! id
@@ -125,10 +138,10 @@ object User {
             replyTo ! None
             Behaviors.same
 
-          case SessionAddUserResponse(newSession, Right(())) if newSession == targetSession =>
+          case SessionAddUserResponse(newSession, Right(position)) if newSession == targetSession =>
             context.log.debug("[joining] SessionAddUserResponse: success")
             initiator ! Right(())
-            buffer.unstashAll(joined(id, newSession))
+            buffer.unstashAll(joined(id, newSession, position))
 
           case SessionAddUserResponse(newSession, Left(SessionFull)) if newSession == targetSession =>
             context.log.debug("[joining] SessionAddUserResponse: session full")
@@ -147,7 +160,12 @@ object User {
       }
     }
 
-  private def joined(id: Id, currentSession: Session.Actor, ready: Boolean = false): Behavior[Command] =
+  private def joined(
+    id: Id,
+    currentSession: Session.Actor,
+    position: PlayerDirection,
+    ready: Boolean = false,
+  ): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
@@ -160,7 +178,7 @@ object User {
         case JoinSession(session, replyTo) =>
           context.log.debug("[joined] JoinSession: leaving old session")
           val removedFut = currentSession.ask[Unit](Session.RemoveUser(context.self, _))
-          val adapter = context.messageAdapter[Either[SessionFull, Unit]](SessionAddUserResponse(session, _))
+          val adapter = context.messageAdapter[Either[SessionFull, PlayerDirection]](SessionAddUserResponse(session, _))
           removedFut.map(_ => session ! Session.AddUser(context.self, adapter))
           context.unwatch(currentSession)
           joining(id, session, replyTo)
@@ -175,11 +193,16 @@ object User {
         case SetReady(ready, replyTo) =>
           context.log.debug("[joined] SetReady({})", ready)
           replyTo ! Right(())
-          joined(id, currentSession, ready = ready)
+          joined(id, currentSession, position, ready = ready)
 
         case GetReady(replyTo) =>
           context.log.debug("[joined] GetReady")
           replyTo ! ready
+          Behaviors.same
+
+        case GetDirection(replyTo) =>
+          context.log.debug("[joined] GetDirection")
+          replyTo ! Right(position)
           Behaviors.same
 
         case GetId(replyTo) =>

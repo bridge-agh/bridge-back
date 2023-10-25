@@ -7,6 +7,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
 
+import agh.bridge.core.PlayerDirection
+
 object Session {
   type Actor = ActorRef[Command]
   type Id = String
@@ -15,12 +17,12 @@ object Session {
   type SessionFull = SessionFull.type
 
   sealed trait Command
-  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends Command
+  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, PlayerDirection]]) extends Command
   final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(replyTo: ActorRef[LobbyInfo]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
 
-  final case class Player(id: User.Id, ready: Boolean, position: Int)
+  final case class Player(id: User.Id, ready: Boolean, position: PlayerDirection)
   final case class LobbyInfo(host: User.Id, users: List[Player], started: Boolean)
 
   private final case class UserDied(user: User.Actor) extends Command
@@ -37,7 +39,15 @@ object Session {
 
         case AddUser(user, replyTo) if users.length < 4 =>
           context.log.debug("[session] AddUser")
-          replyTo ! Right(())
+          val directionsFut = Future.sequence(users map { user =>
+            user.ask[Either[User.UserNotInSession, PlayerDirection]](User.GetDirection(_))
+          })
+          val freeDirectionFut = directionsFut map { directionList =>
+            val directions = directionList.map(_.right.get)
+            val freeDirections = PlayerDirection.values diff directions
+            freeDirections.head
+          }
+          freeDirectionFut map (replyTo ! Right(_))
           context.watchWith(user, UserDied(user))
           session(id, users :+ user)
           
@@ -74,11 +84,15 @@ object Session {
           val readyFut =  Future.sequence(users map { user =>
             user.ask[Boolean](User.GetReady(_))
           })
+          val positionFut = Future.sequence(users map { user =>
+            user.ask[Either[User.UserNotInSession, PlayerDirection]](User.GetDirection(_))
+          })
           val playersFut = for {
             ids <- idsFut
             ready <- readyFut
-          } yield ids.zip(ready).zipWithIndex.map { case ((id, ready), position) =>
-            Player(id, ready, position)
+            position <- positionFut
+          } yield ids.zip(ready).zip(position).map { case ((id, ready), position) =>
+            Player(id, ready, position.right.get)
           }
           val info = for {
             hostId <- hostIdFut

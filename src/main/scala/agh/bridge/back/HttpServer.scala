@@ -129,7 +129,7 @@ object HttpServer {
                       onSuccess(infoOptFut) {
                         case Right(info) => complete(GetLobbyInfoResponse(
                           info.host,
-                          info.users map { user => PlayerModel(user.id, user.ready, user.position) },
+                          info.users map { user => PlayerModel(user.id, user.ready, user.position.ordinal) },
                           info.started,
                         ))
                         case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
