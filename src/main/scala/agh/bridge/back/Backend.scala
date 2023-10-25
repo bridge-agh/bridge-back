@@ -27,17 +27,24 @@ object Backend {
   final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.LobbyInfo]]) extends Command
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
 
-  final case class HostJoinSessionResponse(
+  private final case class HostJoinSessionResponse(
     sessionId: Session.Id,
     session: Session.Actor,
     createLobbyInitiator: ActorRef[Session.Id],
     result: Either[SessionFull, Unit]
   ) extends Command
 
+  private final case class UserStopped(userId: User.Id) extends Command
+  private final case class SessionStopped(sessionId: Session.Id) extends Command
+
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.setLoggerName("agh.bridge.back.Backend")
     val users: Map[User.Id, User.Actor] =
-      Map.empty.withDefault(id => context.spawn(User(id), s"user-$id"))
+      Map.empty.withDefault { id => 
+        var user = context.spawn(User(id), s"user-$id") 
+        context.watchWith(user, UserStopped(id))
+        user
+      }
     val sessions: Map[Session.Id, Session.Actor] = Map.empty
     backend(users, sessions)
   }
@@ -76,6 +83,7 @@ object Backend {
         val host = users(hostId)
         val sessionId = java.util.UUID.randomUUID.toString
         val session = context.spawn(Session(sessionId), s"session-$sessionId")
+        context.watchWith(session, SessionStopped(sessionId))
         val adapter = context.messageAdapter[Either[SessionFull, Unit]](
           HostJoinSessionResponse(sessionId, session, replyTo, _))
         host ! User.JoinSession(session, adapter)
@@ -126,6 +134,14 @@ object Backend {
         user ! User.SetReady(ready, replyTo)
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
+
+      case UserStopped(userId) =>
+        context.log.debug("[backend] UserStopped({})", userId)
+        backend(users - userId, sessions)
+
+      case SessionStopped(sessionId) =>
+        context.log.debug("[backend] SessionStopped({})", sessionId)
+        backend(users, sessions - sessionId)
     }
   }
 }

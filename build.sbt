@@ -11,7 +11,7 @@ lazy val javaOpts = python.scalapyProperties.get.map {
 lazy val root = project
   .in(file("."))
   .settings(
-    name := "agh.bridge.back",
+    name := "agh.bridge",
     version := "0.1.0",
 
     scalaVersion := scala3Version,
