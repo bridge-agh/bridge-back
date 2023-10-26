@@ -151,7 +151,45 @@ class BackendSuite extends FunSuite {
           List(
             Session.Player("u1", false, PlayerDirection.North),
             Session.Player("u3", false, PlayerDirection.South),
-            Session.Player("u4", false, PlayerDirection.East)
+            Session.Player("u4", false, PlayerDirection.East),
+          ),
+          false
+        )
+      ))
+  }
+
+  backendTestKit.test("force swap") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
+      joinRes1 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u2", _))
+      joinRes2 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u3", _))
+      infoOpt1 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+      swapRes <- backend.ask[Either[Backend.SessionNotFound, Unit]](Backend.ForceSwap(sessionId, PlayerDirection.East, PlayerDirection.South, _))
+      infoOpt2 <- backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+    yield
+      assert(sessionId.nonEmpty)
+      assertEquals(joinRes1, Right(()))
+      assertEquals(joinRes2, Right(()))
+      assertEquals(infoOpt1, Right(
+        Session.LobbyInfo(
+          "u1",
+          List(
+            Session.Player("u1", false, PlayerDirection.North),
+            Session.Player("u2", false, PlayerDirection.East),
+            Session.Player("u3", false, PlayerDirection.South),
+          ),
+          false
+        )
+      ))
+      assertEquals(swapRes, Right(()))
+      assertEquals(infoOpt2, Right(
+        Session.LobbyInfo(
+          "u1",
+          List(
+            Session.Player("u1", false, PlayerDirection.North),
+            Session.Player("u2", false, PlayerDirection.South),
+            Session.Player("u3", false, PlayerDirection.East),
           ),
           false
         )
