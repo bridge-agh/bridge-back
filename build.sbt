@@ -3,7 +3,8 @@ val akkaVersion = "2.8.5"
 val akkaHttpVersion = "10.5.3"
 
 import ai.kien.python.Python
-lazy val python = Python()
+import sys.process._
+lazy val python = Python("which python".!!.trim)
 lazy val javaOpts = python.scalapyProperties.get.map {
   case (k, v) => s"""-D$k=$v"""
 }.toSeq
