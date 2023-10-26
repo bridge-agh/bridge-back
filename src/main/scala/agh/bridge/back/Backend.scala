@@ -7,11 +7,12 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
 
+import agh.bridge.core.PlayerDirection
+import Session.SessionFull
+import Session.UserNotInSession
+
 object Backend {
   type Actor = ActorRef[Command]
-
-  import Session.SessionFull
-  import User.UserNotInSession
 
   case object SessionNotFound
   type SessionNotFound = SessionNotFound.type
@@ -25,6 +26,7 @@ object Backend {
   final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends Command
   final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.LobbyInfo]]) extends Command
+  final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends Command
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
 
   private final case class HostJoinSessionResponse(
@@ -128,10 +130,26 @@ object Backend {
         lobbyInfoOptFut map (replyTo ! _)
         Behaviors.same
 
+      case ForceSwap(sessionId, first, second, replyTo) =>
+        context.log.debug("[backend] ForceSwap({}, {}, {})", sessionId, first, second)
+        val sessionOpt = sessions.get(sessionId)
+        val swapResultFut = sessionOpt match {
+          case Some(session) => session.ask[Unit](Session.ForceSwap(first, second, _)).map(Right.apply)
+          case None => Future.successful(Left(SessionNotFound))
+        }
+        swapResultFut map (replyTo ! _)
+        Behaviors.same
+
       case SetUserReady(userId, ready, replyTo) =>
         context.log.debug("[backend] SetUserReady({}, {})", userId, ready)
         val user = users(userId)
-        user ! User.SetReady(ready, replyTo)
+        for
+          session <- user.ask[Option[Session.Actor]](User.GetSession(_))
+        do
+          session match {
+            case Some(session) => session ! Session.SetUserReady(user, ready, replyTo)
+            case None => replyTo ! Left(UserNotInSession)
+          }
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
 

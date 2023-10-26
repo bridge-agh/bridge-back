@@ -13,12 +13,60 @@ object Session {
   type Actor = ActorRef[Command]
   type Id = String
 
+  private final case class LobbyUserState(
+    ready: Boolean,
+    position: PlayerDirection,
+  )
+
+  private final case class LobbyState(
+    host: User.Actor,
+    users: Map[User.Actor, LobbyUserState],
+) {
+    def addUser(user: User.Actor) = {
+      val direction = (PlayerDirection.values diff users.values.map(_.position).toSeq).head
+      LobbyState(host, users + (user -> LobbyUserState(false, direction)))
+    }
+
+    def removeUser(user: User.Actor) = {
+      val newUsers = users - user
+      val newHost = if (user == host) newUsers.keys.head else host
+      LobbyState(newHost, newUsers)
+    }
+
+    def setUserReady(user: User.Actor, ready: Boolean) = {
+      LobbyState(host, users.updated(user, LobbyUserState(ready, users(user).position)))
+    }
+
+    def forceSwap(first: PlayerDirection, second: PlayerDirection) = {
+      LobbyState(
+        host,
+        users.map { case (user, state) =>
+          val newPosition = if (state.position == first) second else if (state.position == second) first else state.position
+          user -> LobbyUserState(state.ready, newPosition)
+        }
+      )
+    }
+
+    def allReady = users.size == 4 && users.values.forall(_.ready)
+}
+
+  private object LobbyState {
+    def apply(host: User.Actor): LobbyState = LobbyState(host, Map(host -> LobbyUserState(false, PlayerDirection.North)))
+  }
+
+  private final case class GameState()
+
   case object SessionFull
   type SessionFull = SessionFull.type
 
+  case object UserNotInSession
+  type UserNotInSession = UserNotInSession.type
+
   sealed trait Command
-  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, PlayerDirection]]) extends Command
+  final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends Command
   final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
+  final case class SetUserReady(user: User.Actor, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
+  final case class ForceSwap(first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Unit]) extends Command
   final case class GetLobbyInfo(replyTo: ActorRef[LobbyInfo]) extends Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
 
@@ -27,98 +75,135 @@ object Session {
 
   private final case class UserDied(user: User.Actor) extends Command
 
-  def apply(id: Id): Behavior[Command] = session(id, List.empty)
+  given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
-  private def session(id: Id, users: List[User.Actor]): Behavior[Command] =
+  def apply(id: Id): Behavior[Command] = empty(id)
+
+  private def empty(id: Id): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
-      given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
-      context.setLoggerName(s"agh.bridge.back.Session-$id")
+      context.setLoggerName(s"agh.bridge.back.Session-$id [empty]")
       Behaviors.receiveMessage {
 
-        case AddUser(user, replyTo) if users.length < 4 =>
-          context.log.debug("[session] AddUser")
-          val directionsFut = Future.sequence(users map { user =>
-            user.ask[Either[User.UserNotInSession, PlayerDirection]](User.GetDirection(_))
-          })
-          val freeDirectionFut = directionsFut map { directionList =>
-            val directions = directionList.map(_.right.get)
-            val freeDirections = PlayerDirection.values diff directions
-            freeDirections.head
-          }
-          freeDirectionFut map (replyTo ! Right(_))
-          context.watchWith(user, UserDied(user))
-          session(id, users :+ user)
-          
         case AddUser(user, replyTo) =>
-          context.log.debug("[session] AddUser - session full")
-          replyTo ! Left(SessionFull)
-          Behaviors.same
-
-        case RemoveUser(user, replyTo) if users.contains(user) && users.length > 1 =>
-          context.log.debug("[session] RemoveUser")
-          replyTo ! ()
-          context.unwatch(user)
-          session(id, users filterNot(_ == user))
-
-        case RemoveUser(user, replyTo) if users.contains(user) =>
-          context.log.debug("[session] RemoveUser - last user")
-          replyTo ! ()
-          context.unwatch(user)
-          Behaviors.stopped
+          context.log.debug("AddUser: first user")
+          context.watchWith(user, UserDied(user))
+          replyTo ! Right(())
+          lobby(id, LobbyState(user, Map(user -> LobbyUserState(false, PlayerDirection.North))))
 
         case RemoveUser(user, replyTo) =>
-          context.log.warn("[session] RemoveUser - user not in session")
-          replyTo ! ()
-          Behaviors.same
+          context.log.error("RemoveUser: no users")
+          Behaviors.unhandled
+
+        case SetUserReady(user, ready, replyTo) => 
+          context.log.error("SetUserReady: no users")
+          Behaviors.unhandled
+
+        case ForceSwap(first, second, replyTo) =>
+          context.log.error("ForceSwap: no users")
+          Behaviors.unhandled
 
         case GetLobbyInfo(replyTo) =>
-          context.log.debug("[session] GetLobbyInfo")
-          val host = users.head
-          val hostIdFut = host.ask[User.Id](User.GetId(_))
-          val idsFut = Future.sequence(users map { user =>
-            user.ask[User.Id](User.GetId(_))
-          })
-          val readyFut =  Future.sequence(users map { user =>
-            user.ask[Boolean](User.GetReady(_))
-          })
-          val positionFut = Future.sequence(users map { user =>
-            user.ask[Either[User.UserNotInSession, PlayerDirection]](User.GetDirection(_))
-          })
-          val playersFut = for {
-            ids <- idsFut
-            ready <- readyFut
-            position <- positionFut
-          } yield ids.zip(ready).zip(position).map { case ((id, ready), position) =>
-            Player(id, ready, position.right.get)
-          }
-          val startedFut = readyFut map { ready =>
-            ready.length == 4 && ready.forall(identity)
-          }
-          val info = for {
-            hostId <- hostIdFut
-            players <- playersFut
-            started <- startedFut
-          } yield LobbyInfo(hostId, players, started)
-          info map (replyTo ! _)
-          Behaviors.same
+          context.log.error("GetLobbyInfo: no users")
+          Behaviors.unhandled
 
         case GetId(replyTo) =>
-          context.log.debug("[session] GetId")
+          context.log.debug("GetId")
           replyTo ! id
           Behaviors.same
 
-        case UserDied(user) if users.contains(user) && users.length > 1 =>
-          context.log.error("[session] UserDied")
-          session(id, users filterNot(_ == user))
+        case UserDied(user) =>
+          context.log.error("UserDied - no users")
+          Behaviors.unhandled
+      }
+    }
 
-        case UserDied(user) if users.contains(user) =>
-          context.log.error("[session] UserDied - last user")
+  private def lobby(id: Id, state: LobbyState): Behavior[Command] =
+    Behaviors.setup { context =>
+      given ActorSystem[_] = context.system
+      given ExecutionContext = context.executionContext
+      context.setLoggerName(s"agh.bridge.back.Session-$id [lobby]")
+      context.watchWith(state.host, UserDied(state.host))
+      Behaviors.receiveMessage {
+
+        case AddUser(user, replyTo) if state.users.size < 4 =>
+          context.log.debug("AddUser")
+          context.watchWith(user, UserDied(user))
+          replyTo ! Right(())
+          lobby(id, state.addUser(user))
+
+        case AddUser(user, replyTo) =>
+          context.log.debug("AddUser - session full")
+          replyTo ! Left(SessionFull)
+          Behaviors.same
+
+        case RemoveUser(user, replyTo) if state.users.contains(user) && state.users.size > 1 =>
+          context.log.debug("RemoveUser")
+          replyTo ! ()
+          context.unwatch(user)
+          lobby(id, state.removeUser(user))
+
+        case RemoveUser(user, replyTo) if state.users.contains(user) =>
+          context.log.debug("RemoveUser - last user")
+          replyTo ! ()
+          Behaviors.stopped
+
+        case RemoveUser(user, replyTo) =>
+          context.log.error("RemoveUser - user not in session")
+          Behaviors.unhandled
+
+        case SetUserReady(user, ready, replyTo) if state.users.contains(user) =>
+          context.log.debug("SetUserReady")
+          replyTo ! Right(())
+          lobby(id, state.setUserReady(user, ready))
+
+        case SetUserReady(user, ready, replyTo) =>
+          context.log.error("SetUserReady - user not in session")
+          replyTo ! Left(UserNotInSession)
+          Behaviors.same
+
+        case ForceSwap(first, second, replyTo) =>
+          context.log.debug("ForceSwap")
+          replyTo ! ()
+          lobby(id, state.forceSwap(first, second))
+
+        case GetLobbyInfo(replyTo) =>
+          context.log.debug("GetLobbyInfo")
+          val host = state.host
+          val ready = state.users.values.map(_.ready)
+          val position = state.users.values.map(_.position)
+          for
+            hostId <- host.ask[User.Id](User.GetId(_))
+            playerIds <- Future.sequence(state.users.keys map { user =>
+                           user.ask[User.Id](User.GetId(_))
+                         })
+          do
+            val info = LobbyInfo(
+              hostId,
+              (playerIds zip ready zip position).map { case ((id, ready), position) =>
+                Player(id, ready, position)
+              }.toList,
+              state.allReady,
+            )
+            replyTo ! info
+          Behaviors.same
+
+        case GetId(replyTo) =>
+          context.log.debug("GetId")
+          replyTo ! id
+          Behaviors.same
+
+        case UserDied(user) if state.users.contains(user) && state.users.nonEmpty =>
+          context.log.error("UserDied")
+          lobby(id, state.removeUser(user))
+
+        case UserDied(user) if state.users.contains(user) =>
+          context.log.error("UserDied - last user")
           Behaviors.stopped
 
         case UserDied(user) =>
-          context.log.error("[session] UserDied - user not in session")
+          context.log.error("UserDied - user not in session")
           Behaviors.unhandled
       }
     }

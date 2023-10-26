@@ -14,6 +14,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
+import agh.bridge.core.PlayerDirection
 
 object HttpServer {
 
@@ -52,6 +53,11 @@ object HttpServer {
 
   private final case class GetLobbyInfoResponse(hostId: User.Id, users: List[PlayerModel], started: Boolean)
   private given RootJsonFormat[GetLobbyInfoResponse] = jsonFormat3(GetLobbyInfoResponse.apply)
+
+  // POST /session/lobby/force-swap
+
+  private final case class ForceSwapRequest(sessionId: Session.Id, first: Int, second: Int)
+  private given RootJsonFormat[ForceSwapRequest] = jsonFormat3(ForceSwapRequest.apply)
 
   // POST /session/lobby/ready
 
@@ -137,13 +143,20 @@ object HttpServer {
                     }
                   }
                 },
+                path("force-swap") {
+                  post {
+                    entity(as[ForceSwapRequest]) { request =>
+                      complete(StatusCodes.NotImplemented)
+                    }
+                  }
+                },
                 path("ready") {
                   post {
                     entity(as[SetUserReadyRequest]) { request =>
-                      val resFut = backend.ask[Either[User.UserNotInSession, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
+                      val resFut = backend.ask[Either[Session.UserNotInSession, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
                       complete(resFut map {
                         case Right(()) => StatusCodes.OK
-                        case Left(User.UserNotInSession) => StatusCodes.Conflict
+                        case Left(Session.UserNotInSession) => StatusCodes.Conflict
                       })
                     }
                   }
