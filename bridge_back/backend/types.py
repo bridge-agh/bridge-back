@@ -1,2 +1,0 @@
-UserId = str
-SessionId = str
