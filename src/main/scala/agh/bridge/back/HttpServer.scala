@@ -203,7 +203,7 @@ object HttpServer {
       )
     )
 
-    val bindingFuture = Http().newServerAt("localhost", 8000).bind(route)
+    val bindingFuture = Http().newServerAt("0.0.0.0", 8000).bind(route)
 
     Behaviors.empty
   }

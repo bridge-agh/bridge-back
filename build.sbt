@@ -15,6 +15,9 @@ lazy val root = project
     name := "agh.bridge",
     version := "0.1.0",
 
+    Compile / mainClass := Some("agh.bridge.back.run"),
+    dockerExposedPorts := Seq(8000),
+
     scalaVersion := scala3Version,
     fork := true,
     javaOptions ++= javaOpts,
@@ -38,3 +41,6 @@ lazy val root = project
       "me.shadaj" %% "scalapy-core" % "0.5.2",
     ),
   )
+
+enablePlugins(JavaAppPackaging)
+enablePlugins(DockerPlugin)
