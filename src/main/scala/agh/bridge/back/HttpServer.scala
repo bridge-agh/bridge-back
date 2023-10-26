@@ -14,7 +14,9 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
+
 import agh.bridge.core.PlayerDirection
+import agh.bridge.back.CorsHandler.cors
 
 object HttpServer {
 
@@ -70,7 +72,7 @@ object HttpServer {
     given ExecutionContext = context.executionContext
     given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
-    val route =
+    val route = cors(
       concat(
         path("healthcheck") {
           get {
@@ -146,7 +148,11 @@ object HttpServer {
                 path("force-swap") {
                   post {
                     entity(as[ForceSwapRequest]) { request =>
-                      complete(StatusCodes.NotImplemented)
+                      val resFut = backend.ask[Either[Backend.SessionNotFound, Unit]](Backend.ForceSwap(request.sessionId, PlayerDirection.fromOrdinal(request.first), PlayerDirection.fromOrdinal(request.second), _))
+                      complete(resFut map {
+                        case Right(()) => StatusCodes.OK
+                        case Left(Backend.SessionNotFound) => StatusCodes.NotFound
+                      })
                     }
                   }
                 },
@@ -195,6 +201,7 @@ object HttpServer {
           )
         },
       )
+    )
 
     val bindingFuture = Http().newServerAt("localhost", 8000).bind(route)
 
