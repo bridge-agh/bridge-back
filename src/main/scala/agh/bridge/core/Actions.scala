@@ -1,14 +1,27 @@
 package agh.bridge.core
 
-import me.shadaj.scalapy.py as python
+import me.shadaj.scalapy.py.Dynamic
 
 sealed trait Action:
-  def py: python.Dynamic
+  def py: Dynamic
 
 sealed trait Call extends Action
 
+object Call:
+  def apply(py: Dynamic): Call =
+    if Dynamic.global.isinstance(py, BridgePy.bids.TrickBid).as[Boolean] then
+      Bid(py)
+    else
+      py.name.as[String] match
+        case "PASS" => Pass
+        case "DOUBLE" => Double 
+
 final case class Bid(level: BidLevel, suit: BidSuit) extends Call:
   def py = BridgePy.bids.TrickBid(suit.py, level.py)
+
+object Bid:
+  def apply(py: Dynamic): Bid =
+    Bid(BidLevel(py.tricks), BidSuit(py.suit))
 
 case object Pass extends Call:
   def py = BridgePy.bids.SpecialBid.PASS
@@ -21,4 +34,3 @@ case object Redouble extends Call:
 
 final case class Play(card: Card) extends Action:
   def py = card.py
-

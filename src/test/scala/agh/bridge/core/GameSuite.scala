@@ -75,4 +75,107 @@ class GameSuite extends FunSuite {
     test("create game") {
       val game = new Game(0)
     }
+
+    test("observation after stepping") {
+      val game = new Game(0)
+
+      val actions = List(
+        Bid(BidLevel.Three, BidSuit.Spades),
+        Bid(BidLevel.Seven, BidSuit.Hearts),
+        Pass,
+        Bid(BidLevel.Seven, BidSuit.Spades),
+        Bid(BidLevel.Seven, BidSuit.NoTrump),
+        Double,
+        Pass,
+        Pass,
+        Pass,
+        Play(Card(Suit.Hearts, Rank.Five)),
+        Play(Card(Suit.Hearts, Rank.Ten)),
+        Play(Card(Suit.Diamonds, Rank.Nine)),
+        Play(Card(Suit.Hearts, Rank.Eight)),
+        Play(Card(Suit.Hearts, Rank.Jack)),
+        Play(Card(Suit.Clubs, Rank.Eight)),
+        Play(Card(Suit.Hearts, Rank.King)),
+        Play(Card(Suit.Hearts, Rank.Seven)),
+        Play(Card(Suit.Hearts, Rank.Two)),
+        Play(Card(Suit.Hearts, Rank.Nine)),
+        Play(Card(Suit.Hearts, Rank.Three))
+      )
+
+      actions.foreach(game.step)
+
+      val player_obs = PlayerObservation(
+        gameStage = GameStage.Playing,
+        currentPlayer = PlayerDirection.East,
+        bidding = PlayerObservation.Bidding(
+          firstDealer = PlayerDirection.North,
+          bidHistory = List(
+            Bid(BidLevel.Three, BidSuit.Spades),
+            Bid(BidLevel.Seven, BidSuit.Hearts),
+            Pass,
+            Bid(BidLevel.Seven, BidSuit.Spades),
+            Bid(BidLevel.Seven, BidSuit.NoTrump),
+            Double,
+            Pass,
+            Pass,
+            Pass
+          ),
+          bid = Bid(BidLevel.Seven, BidSuit.NoTrump),
+          declarer = PlayerDirection.North,
+          multiplier = 2
+        ),
+        game = PlayerObservation.Game(
+          roundPlayer = PlayerDirection.South,
+          roundCards = List(
+            Card(Suit.Hearts, Rank.Two),
+            Card(Suit.Hearts, Rank.Nine),
+            Card(Suit.Hearts, Rank.Three)
+          ),
+          dummy = List(
+            Card(Suit.Clubs, Rank.Three),
+            Card(Suit.Clubs, Rank.Four),
+            Card(Suit.Clubs, Rank.Five),
+            Card(Suit.Diamonds, Rank.Five),
+            Card(Suit.Diamonds, Rank.Six),
+            Card(Suit.Diamonds, Rank.Eight),
+            Card(Suit.Diamonds, Rank.Jack),
+            Card(Suit.Spades, Rank.Three),
+            Card(Suit.Spades, Rank.Six),
+            Card(Suit.Spades, Rank.Eight),
+            Card(Suit.Spades, Rank.Queen)
+          ),
+          tricks = Map(
+            PairDirection.NorthSouth -> List(
+              (PlayerDirection.West, PlayerDirection.North, List(
+                Card(Suit.Hearts, Rank.Five),
+                Card(Suit.Hearts, Rank.Ten),
+                Card(Suit.Diamonds, Rank.Nine),
+                Card(Suit.Hearts, Rank.Eight)
+              )),
+              (PlayerDirection.North, PlayerDirection.South, List(
+                Card(Suit.Hearts, Rank.Jack),
+                Card(Suit.Clubs, Rank.Eight),
+                Card(Suit.Hearts, Rank.King),
+                Card(Suit.Hearts, Rank.Seven)
+              ))
+            ),
+            PairDirection.EastWest -> List()
+          )
+        ),
+        hand = List(
+          Card(Suit.Clubs, Rank.Three),
+          Card(Suit.Clubs, Rank.Four),
+          Card(Suit.Clubs, Rank.Five),
+          Card(Suit.Diamonds, Rank.Five),
+          Card(Suit.Diamonds, Rank.Six),
+          Card(Suit.Diamonds, Rank.Eight),
+          Card(Suit.Diamonds, Rank.Jack),
+          Card(Suit.Spades, Rank.Three),
+          Card(Suit.Spades, Rank.Six),
+          Card(Suit.Spades, Rank.Eight),
+          Card(Suit.Spades, Rank.Queen)
+        )
+      )
+      assertEquals(game.playerObservation(game.currentPlayer), player_obs)
+    }
 }
