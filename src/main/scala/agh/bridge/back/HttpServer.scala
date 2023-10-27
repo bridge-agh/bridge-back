@@ -133,7 +133,7 @@ object HttpServer {
                 path("info") {
                   get {
                     parameter("sessionId".as[Session.Id]) { sessionId =>
-                      val infoOptFut = backend.ask[Either[Backend.SessionNotFound, Session.LobbyInfo]](Backend.GetLobbyInfo(sessionId, _))
+                      val infoOptFut = backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))
                       onSuccess(infoOptFut) {
                         case Right(info) => complete(GetLobbyInfoResponse(
                           info.host,
@@ -159,10 +159,10 @@ object HttpServer {
                 path("ready") {
                   post {
                     entity(as[SetUserReadyRequest]) { request =>
-                      val resFut = backend.ask[Either[Session.UserNotInSession, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
+                      val resFut = backend.ask[Either[Backend.UserNotInSession, Unit]](Backend.SetUserReady(request.userId, request.ready, _))
                       complete(resFut map {
                         case Right(()) => StatusCodes.OK
-                        case Left(Session.UserNotInSession) => StatusCodes.Conflict
+                        case Left(Backend.UserNotInSession) => StatusCodes.Conflict
                       })
                     }
                   }

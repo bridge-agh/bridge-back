@@ -9,13 +9,15 @@ import akka.actor.typed.scaladsl.AskPattern._
 
 import agh.bridge.core.PlayerDirection
 import Session.SessionFull
-import Session.UserNotInSession
 
 object Backend {
   type Actor = ActorRef[Command]
 
   case object SessionNotFound
   type SessionNotFound = SessionNotFound.type
+
+  case object UserNotInSession
+  type UserNotInSession = UserNotInSession.type
 
   sealed trait Command
 
@@ -25,7 +27,7 @@ object Backend {
   final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends Command
   final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends Command
   final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
-  final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.LobbyInfo]]) extends Command
+  final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends Command
   final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends Command
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
 
@@ -124,7 +126,7 @@ object Backend {
         context.log.debug("[backend] GetLobbyInfo({})", sessionId)
         val sessionOpt = sessions.get(sessionId).toRight(SessionNotFound)
         val lobbyInfoOptFut = sessionOpt match {
-          case Right(session) => session.ask[Session.LobbyInfo](Session.GetLobbyInfo(_)) map Right.apply
+          case Right(session) => session.ask[Session.SessionInfo](Session.GetInfo(_)) map Right.apply
           case Left(_) => Future.successful(Left(SessionNotFound))
         }
         lobbyInfoOptFut map (replyTo ! _)
@@ -146,10 +148,11 @@ object Backend {
         for
           session <- user.ask[Option[Session.Actor]](User.GetSession(_))
         do
-          session match {
-            case Some(session) => session ! Session.SetUserReady(user, ready, replyTo)
-            case None => replyTo ! Left(UserNotInSession)
+          val res = session match {
+            case Some(session) => session.ask[Unit](Session.SetUserReady(user, ready, _)).map(Right.apply)
+            case None => Future.successful(Left(UserNotInSession))
           }
+          res map (replyTo ! _)
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
 
