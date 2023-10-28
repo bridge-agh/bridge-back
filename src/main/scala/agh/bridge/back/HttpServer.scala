@@ -123,7 +123,7 @@ object HttpServer {
                       complete(resFut map {
                         case Left(Backend.SessionNotFound) => StatusCodes.NotFound
                         case Left(Session.SessionFull) => StatusCodes.Conflict
-                        case Right(_) => StatusCodes.OK
+                        case Right(()) => StatusCodes.OK
                       })
                     }
                   }
