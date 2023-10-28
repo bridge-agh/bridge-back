@@ -59,7 +59,7 @@ class BackendSuite extends FunSuite {
     for
       sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
       joinRes <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "guest", _))
-      leaveRes <- backend.ask[Unit](Backend.LeaveLobby("guest", _))
+      leaveRes <- backend.ask[Unit](Backend.LeaveSession("guest", _))
       infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))
     yield
       assert(sessionId.nonEmpty)
@@ -122,7 +122,7 @@ class BackendSuite extends FunSuite {
     given ActorSystem[_] = testKit.system
     for
       sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
-      leaveRes <- backend.ask[Unit](Backend.LeaveLobby("host", _))
+      leaveRes <- backend.ask[Unit](Backend.LeaveSession("host", _))
       foundSessionId <- backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession("host", _))
       infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))
     yield
@@ -136,7 +136,7 @@ class BackendSuite extends FunSuite {
       sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
       joinRes1 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u2", _))
       joinRes2 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u3", _))
-      leaveRes1 <- backend.ask[Unit](Backend.LeaveLobby("u2", _))
+      leaveRes1 <- backend.ask[Unit](Backend.LeaveSession("u2", _))
       joinRes3 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u4", _))
       infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))
     yield
@@ -202,7 +202,7 @@ class BackendSuite extends FunSuite {
       sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
       joinRes1 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u2", _))
       joinRes2 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u3", _))
-      leaveRes1 <- backend.ask[Unit](Backend.LeaveLobby("u2", _))
+      leaveRes1 <- backend.ask[Unit](Backend.LeaveSession("u2", _))
       joinRes3 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u4", _))
       joinRes4 <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(sessionId, "u5", _))
       infoOpt1 <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))

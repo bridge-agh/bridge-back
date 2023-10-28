@@ -21,15 +21,23 @@ object Backend {
 
   sealed trait Command
 
-  final case class Heartbeat(userId: User.Id) extends Command
-  final case class FindSession(userId: User.Id, replyTo: ActorRef[Either[SessionNotFound, Session.Id]]) extends Command
+  sealed trait UserCommand extends Command
+  final case class Heartbeat(userId: User.Id) extends UserCommand
+  final case class FindSession(userId: User.Id, replyTo: ActorRef[Either[SessionNotFound, Session.Id]]) extends UserCommand
+  final case class LeaveSession(userId: User.Id, replyTo: ActorRef[Unit]) extends UserCommand
+  final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends UserCommand
+  final case class JoinLobby(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends UserCommand
+  final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
 
-  final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends Command
-  final case class JoinLobby(sessionId: Session.Id, userId: User.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends Command
-  final case class LeaveLobby(userId: User.Id, replyTo: ActorRef[Unit]) extends Command
-  final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends Command
-  final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends Command
-  final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends Command
+  sealed trait SessionCommand extends Command
+  final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
+  final case class SubscribeToSessionInfo(sessionId: Session.Id, subscriber: ActorRef[Session.SessionInfo]) extends SessionCommand
+
+  sealed trait LobbyCommand extends SessionCommand
+  final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends LobbyCommand
+
+  private final case class UserDied(userId: User.Id) extends Command
+  private final case class SessionDied(sessionId: Session.Id) extends Command
 
   private final case class HostJoinSessionResponse(
     sessionId: Session.Id,
@@ -37,9 +45,6 @@ object Backend {
     createLobbyInitiator: ActorRef[Session.Id],
     result: Either[SessionFull, Unit]
   ) extends Command
-
-  private final case class UserDied(userId: User.Id) extends Command
-  private final case class SessionDied(sessionId: Session.Id) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.setLoggerName("agh.bridge.back.Backend")
@@ -103,7 +108,7 @@ object Backend {
         context.log.debug("[backend] HostJoinSessionResponse: unexpected SessionFull")
         Behaviors.unhandled
 
-      case JoinLobby(sessionId, userId, replyTo) =>
+      case JoinLobby(userId, sessionId, replyTo) =>
         context.log.debug("[backend] JoinLobby({}, {})", sessionId, userId)
         val user = users(userId)
         val sessionOpt = sessions.get(sessionId)
@@ -115,8 +120,8 @@ object Backend {
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
 
-      case LeaveLobby(userId, replyTo) =>
-        context.log.debug("[backend] LeaveLobby({})", userId)
+      case LeaveSession(userId, replyTo) =>
+        context.log.debug("[backend] LeaveSession({})", userId)
         val user = users(userId)
         user ! User.LeaveSession(replyTo)
         if (users contains userId) Behaviors.same
@@ -163,6 +168,12 @@ object Backend {
       case SessionDied(sessionId) =>
         context.log.debug("[backend] SessionDied({})", sessionId)
         backend(users, sessions - sessionId)
+
+      case SubscribeToSessionInfo(sessionId, subscriber) =>
+        context.log.debug("[backend] SubscribeToSessionInfo({})", sessionId)
+        val sessionOpt = sessions.get(sessionId).toRight(SessionNotFound)
+        sessionOpt.map(_ ! Session.AddSubscriber(subscriber))
+        Behaviors.same
     }
   }
 }

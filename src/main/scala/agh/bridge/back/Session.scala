@@ -67,6 +67,7 @@ object Session {
   final case class GetId(replyTo: ActorRef[Id]) extends Command
   final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
   final case class GetInfo(replyTo: ActorRef[SessionInfo]) extends Command
+  final case class AddSubscriber(replyTo: ActorRef[SessionInfo]) extends Command
 
   sealed trait LobbyCommand extends Command
   final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends LobbyCommand
@@ -76,6 +77,7 @@ object Session {
   sealed trait GameCommand extends Command
 
   private final case class UserDied(user: User.Actor) extends Command
+  private final case class SubscriberDied(subscriber: ActorRef[SessionInfo]) extends Command
 
   given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
@@ -90,9 +92,10 @@ object Session {
 
         case AddUser(user, replyTo) =>
           context.log.debug("AddUser: first user")
+          val state = SessionState(user)
           context.watchWith(user, UserDied(user))
           replyTo ! Right(())
-          lobby(id, SessionState(user))
+          lobby(id, state, Nil)
 
         case RemoveUser(user, replyTo) =>
           context.log.error("RemoveUser: no users")
@@ -118,10 +121,18 @@ object Session {
         case UserDied(user) =>
           context.log.error("UserDied - no users")
           Behaviors.unhandled
+
+        case AddSubscriber(replyTo) =>
+          context.log.error("AddSubscriber: empty session")
+          Behaviors.unhandled
+
+        case SubscriberDied(subscriber) =>
+          context.log.error("SubscriberDied: empty session")
+          Behaviors.unhandled
       }
     }
 
-  private def lobby(id: Id, state: SessionState): Behavior[Command] =
+  private def lobby(id: Id, state: SessionState, subs: List[ActorRef[SessionInfo]]): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
@@ -131,9 +142,11 @@ object Session {
 
         case AddUser(user, replyTo) if state.users.size < 4 =>
           context.log.debug("AddUser")
+          val newState = state.addUser(user)
           context.watchWith(user, UserDied(user))
           replyTo ! Right(())
-          lobby(id, state.addUser(user))
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
 
         case AddUser(user, replyTo) =>
           context.log.debug("AddUser - session full")
@@ -142,9 +155,11 @@ object Session {
 
         case RemoveUser(user, replyTo) if state.users.contains(user) && state.users.size > 1 =>
           context.log.debug("RemoveUser")
+          val newState = state.removeUser(user)
           replyTo ! ()
           context.unwatch(user)
-          lobby(id, state.removeUser(user))
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
 
         case RemoveUser(user, replyTo) if state.users.contains(user) =>
           context.log.debug("RemoveUser - last user")
@@ -157,13 +172,14 @@ object Session {
 
         case SetUserReady(user, ready, replyTo) if state.users.contains(user) =>
           context.log.debug("SetUserReady")
-          replyTo ! Right(())
           val newState = state.setReady(user, ready)
+          replyTo ! Right(())
+          notifySubscribers(subs, newState)
           if newState.allReady then
             context.log.debug("SetUserReady - starting game")
-            game(id, GameState(newState))
+            game(id, GameState(newState), subs)
           else
-            lobby(id, newState)
+            lobby(id, newState, subs)
 
         case SetUserReady(user, ready, replyTo) =>
           context.log.error("SetUserReady - user not in session")
@@ -171,28 +187,14 @@ object Session {
 
         case ForceSwap(first, second, replyTo) =>
           context.log.debug("ForceSwap")
+          val newState = state.forceSwap(first, second)
           replyTo ! ()
-          lobby(id, state.forceSwap(first, second))
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
 
         case GetInfo(replyTo) =>
           context.log.debug("GetInfo")
-          val host = state.host
-          val ready = state.users.values.map(_.ready)
-          val position = state.users.values.map(_.position)
-          for
-            hostId <- host.ask[User.Id](User.GetId(_))
-            playerIds <- Future.sequence(state.users.keys map { user =>
-                           user.ask[User.Id](User.GetId(_))
-                         })
-          do
-            val info = SessionInfo(
-              hostId,
-              (playerIds zip ready zip position).map { case ((id, ready), position) =>
-                PlayerInfo(id, ready, position)
-              }.toList,
-              state.allReady,
-            )
-            replyTo ! info
+          sendInfo(replyTo, state)
           Behaviors.same
 
         case GetId(replyTo) =>
@@ -202,7 +204,9 @@ object Session {
 
         case UserDied(user) if state.users.contains(user) && state.users.nonEmpty =>
           context.log.error("UserDied")
-          lobby(id, state.removeUser(user))
+          val newState = state.removeUser(user)
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
 
         case UserDied(user) if state.users.contains(user) =>
           context.log.error("UserDied - last user")
@@ -211,10 +215,20 @@ object Session {
         case UserDied(user) =>
           context.log.error("UserDied - user not in session")
           Behaviors.unhandled
+
+        case AddSubscriber(replyTo) =>
+          context.log.debug("AddSubscriber")
+          context.watchWith(replyTo, SubscriberDied(replyTo))
+          sendInfo(replyTo, state)
+          lobby(id, state, replyTo :: subs)
+
+        case SubscriberDied(subscriber) =>
+          context.log.debug("SubscriberDied")
+          lobby(id, state, subs.filterNot(_ == subscriber))
       }
     }
 
-  private def game(id: Id, state: GameState): Behavior[Command] =
+  private def game(id: Id, state: GameState, subs: List[ActorRef[SessionInfo]]): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
@@ -239,23 +253,7 @@ object Session {
 
         case GetInfo(replyTo) =>
           context.log.debug("GetInfo")
-          val host = state.session.host
-          val ready = state.session.users.values.map(_.ready)
-          val position = state.session.users.values.map(_.position)
-          for
-            hostId <- host.ask[User.Id](User.GetId(_))
-            playerIds <- Future.sequence(state.session.users.keys map { user =>
-                           user.ask[User.Id](User.GetId(_))
-                         })
-          do
-            val info = SessionInfo(
-              hostId,
-              (playerIds zip ready zip position).map { case ((id, ready), position) =>
-                PlayerInfo(id, ready, position)
-              }.toList,
-              state.session.allReady,
-            )
-            replyTo ! info
+          sendInfo(replyTo, state.session)
           Behaviors.same
 
         case GetId(replyTo) =>
@@ -266,6 +264,38 @@ object Session {
         case UserDied(user) =>
           context.log.error("UserDied - killing game")
           throw NotImplementedError()
+
+        case AddSubscriber(replyTo) =>
+          context.log.debug("AddSubscriber")
+          context.watchWith(replyTo, SubscriberDied(replyTo))
+          sendInfo(replyTo, state.session)
+          game(id, state, replyTo :: subs)
+
+        case SubscriberDied(subscriber) =>
+          context.log.debug("SubscriberDied")
+          game(id, state, subs.filterNot(_ == subscriber))
       }
     }
+
+  private def sendInfo(replyTo: ActorRef[SessionInfo], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
+    val host = state.host
+    val ready = state.users.values.map(_.ready)
+    val position = state.users.values.map(_.position)
+    for
+      hostId <- host.ask[User.Id](User.GetId(_))
+      playerIds <- Future.sequence(state.users.keys.map { user =>
+                     user.ask[User.Id](User.GetId(_))
+                   })
+    do
+      val info = SessionInfo(
+        hostId,
+        (playerIds zip ready zip position).map { case ((id, ready), position) =>
+          PlayerInfo(id, ready, position)
+        }.toList,
+        state.allReady,
+      )
+      replyTo ! info
+
+  private def notifySubscribers(subs: List[ActorRef[SessionInfo]], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
+    subs.foreach(sendInfo(_, state))
 }

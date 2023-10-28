@@ -2,16 +2,22 @@ package agh.bridge.back
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
+
+import akka.stream._
+import akka.stream.scaladsl._
+import akka.stream.typed.scaladsl.{ ActorSource, ActorSink }
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
+import spray.json._
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
 
@@ -113,7 +119,7 @@ object HttpServer {
                 path("join") {
                   post {
                     entity(as[JoinLobbyRequest]) { request =>
-                      val resFut = backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(request.sessionId, request.userId, _))
+                      val resFut = backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby(request.userId, request.sessionId, _))
                       complete(resFut map {
                         case Left(Backend.SessionNotFound) => StatusCodes.NotFound
                         case Left(Session.SessionFull) => StatusCodes.Conflict
@@ -125,24 +131,30 @@ object HttpServer {
                 path("leave") {
                   post {
                     entity(as[LeaveLobbyRequest]) { request =>
-                      val resFut = backend.ask[Unit](Backend.LeaveLobby(request.userId, _))
+                      val resFut = backend.ask[Unit](Backend.LeaveSession(request.userId, _))
                       complete(resFut map (_ => StatusCodes.OK))
                     }
                   }
                 },
                 path("info") {
-                  get {
-                    parameter("sessionId".as[Session.Id]) { sessionId =>
-                      val infoOptFut = backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo(sessionId, _))
-                      onSuccess(infoOptFut) {
-                        case Right(info) => complete(GetLobbyInfoResponse(
-                          info.host,
-                          info.users map { user => PlayerModel(user.id, user.ready, user.position.ordinal) },
-                          info.started,
-                        ))
-                        case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
-                      }
+                  parameter("sessionId".as[Session.Id]) { sessionId =>
+                    val source = ActorSource.actorRef[Session.SessionInfo](
+                      completionMatcher = PartialFunction.empty,
+                      failureMatcher = PartialFunction.empty,
+                      bufferSize = 8,
+                      overflowStrategy = OverflowStrategy.dropHead,
+                    ).map { info =>
+                      val resp = GetLobbyInfoResponse(
+                        info.host,
+                        info.users map { user => PlayerModel(user.id, user.ready, user.position.ordinal) },
+                        info.started,
+                      )
+                      ws.TextMessage(resp.toJson.compactPrint)
+                    }.mapMaterializedValue { ref =>
+                      backend ! Backend.SubscribeToSessionInfo(sessionId, ref)
                     }
+                    val flow = Flow.fromSinkAndSourceCoupledMat(Sink.ignore, source)(Keep.right)
+                    handleWebSocketMessages(flow)
                   }
                 },
                 path("force-swap") {
