@@ -112,9 +112,7 @@ object HttpServer {
                           info.started,
                         )
                         ws.TextMessage(resp.toJson.compactPrint)
-                      }.mapMaterializedValue { ref =>
-                        backend ! Backend.SubscribeToSessionInfo(sessionId, ref)
-                      }
+                      }.mapMaterializedValue(backend ! Backend.SubscribeToSessionInfo(sessionId, _))
                       val flow = Flow.fromSinkAndSourceCoupledMat(Sink.ignore, source)(Keep.right)
                       handleWebSocketMessages(flow)
                   }
@@ -153,18 +151,13 @@ object HttpServer {
                       val resFut = backend.ask[Either[Backend.UserNotInSession, Unit]](Backend.SetUserReady(userId, request.ready, _))
                       complete(resFut map {
                         case Right(()) => StatusCodes.OK
-                        case Left(Backend.UserNotInSession) => StatusCodes.Conflict
+                        case Left(Backend.UserNotInSession) => StatusCodes.NotFound
                       })
                     },
                   )
                 },
                 pathPrefix("game") {
                   concat(
-                    path("info") {
-                      get {
-                        complete(StatusCodes.NotImplemented)
-                      }
-                    },
                     path("play") {
                       post {
                         complete(StatusCodes.NotImplemented)
@@ -176,6 +169,11 @@ object HttpServer {
                       }
                     },
                     path("double") {
+                      post {
+                        complete(StatusCodes.NotImplemented)
+                      }
+                    },
+                    path("redouble") {
                       post {
                         complete(StatusCodes.NotImplemented)
                       }
