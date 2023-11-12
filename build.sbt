@@ -36,7 +36,9 @@ lazy val root = project
       "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
       "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
 
-      "ch.qos.logback"    % "logback-classic"           % "1.2.12",
+      "com.google.firebase" % "firebase-admin" % "9.2.0",
+
+      "ch.qos.logback"    % "logback-classic" % "1.4.11",
 
       "me.shadaj" %% "scalapy-core" % "0.5.2",
     ),
