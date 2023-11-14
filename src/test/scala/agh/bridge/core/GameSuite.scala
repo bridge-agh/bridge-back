@@ -89,16 +89,16 @@ class GameSuite extends FunSuite {
         Pass,
         Pass,
         Pass,
-        Play(Card(Suit.Hearts, Rank.Five)),
+        Play(Card(Suit.Diamonds, Rank.Eight)),
+        Play(Card(Suit.Diamonds, Rank.Ace)),
+        Play(Card(Suit.Diamonds, Rank.Three)),
+        Play(Card(Suit.Diamonds, Rank.Queen)),
+        Play(Card(Suit.Spades, Rank.Ten)),
+        Play(Card(Suit.Spades, Rank.Four)),
         Play(Card(Suit.Hearts, Rank.Ten)),
-        Play(Card(Suit.Diamonds, Rank.Nine)),
-        Play(Card(Suit.Hearts, Rank.Eight)),
-        Play(Card(Suit.Hearts, Rank.Jack)),
-        Play(Card(Suit.Clubs, Rank.Eight)),
-        Play(Card(Suit.Hearts, Rank.King)),
-        Play(Card(Suit.Hearts, Rank.Seven)),
-        Play(Card(Suit.Hearts, Rank.Two)),
-        Play(Card(Suit.Hearts, Rank.Nine)),
+        Play(Card(Suit.Spades, Rank.Six)),
+        Play(Card(Suit.Hearts, Rank.Six)),
+        Play(Card(Suit.Hearts, Rank.Five)),
         Play(Card(Suit.Hearts, Rank.Three))
       )
 
@@ -127,36 +127,35 @@ class GameSuite extends FunSuite {
         game = PlayerObservation.Game(
           roundPlayer = PlayerDirection.South,
           roundCards = List(
-            Card(Suit.Hearts, Rank.Two),
-            Card(Suit.Hearts, Rank.Nine),
+            Card(Suit.Hearts, Rank.Six),
+            Card(Suit.Hearts, Rank.Five),
             Card(Suit.Hearts, Rank.Three)
           ),
           dummy = List(
-            Card(Suit.Clubs, Rank.Three),
-            Card(Suit.Clubs, Rank.Four),
-            Card(Suit.Clubs, Rank.Five),
-            Card(Suit.Diamonds, Rank.Five),
-            Card(Suit.Diamonds, Rank.Six),
-            Card(Suit.Diamonds, Rank.Eight),
-            Card(Suit.Diamonds, Rank.Jack),
-            Card(Suit.Spades, Rank.Three),
-            Card(Suit.Spades, Rank.Six),
-            Card(Suit.Spades, Rank.Eight),
-            Card(Suit.Spades, Rank.Queen)
+            Card(Suit.Clubs, Rank.Two),
+            Card(Suit.Clubs, Rank.Ten),
+            Card(Suit.Clubs, Rank.Jack),
+            Card(Suit.Hearts, Rank.Two),
+            Card(Suit.Hearts, Rank.Eight),
+            Card(Suit.Hearts, Rank.King),
+            Card(Suit.Spades, Rank.Five),
+            Card(Suit.Spades, Rank.Nine),
+            Card(Suit.Spades, Rank.Jack),
+            Card(Suit.Spades, Rank.King)
           ),
           tricks = Map(
             PairDirection.NorthSouth -> List(
-              (PlayerDirection.West, PlayerDirection.North, List(
-                Card(Suit.Hearts, Rank.Five),
-                Card(Suit.Hearts, Rank.Ten),
-                Card(Suit.Diamonds, Rank.Nine),
-                Card(Suit.Hearts, Rank.Eight)
+              (PlayerDirection.East, PlayerDirection.South, List(
+                Card(Suit.Diamonds, Rank.Eight),
+                Card(Suit.Diamonds, Rank.Ace),
+                Card(Suit.Diamonds, Rank.Three),
+                Card(Suit.Diamonds, Rank.Queen)
               )),
-              (PlayerDirection.North, PlayerDirection.South, List(
-                Card(Suit.Hearts, Rank.Jack),
-                Card(Suit.Clubs, Rank.Eight),
-                Card(Suit.Hearts, Rank.King),
-                Card(Suit.Hearts, Rank.Seven)
+              (PlayerDirection.South, PlayerDirection.South, List(
+                Card(Suit.Spades, Rank.Ten),
+                Card(Suit.Spades, Rank.Four),
+                Card(Suit.Hearts, Rank.Ten),
+                Card(Suit.Spades, Rank.Six)
               ))
             ),
             PairDirection.EastWest -> List()
@@ -166,12 +165,12 @@ class GameSuite extends FunSuite {
           Card(Suit.Clubs, Rank.Three),
           Card(Suit.Clubs, Rank.Four),
           Card(Suit.Clubs, Rank.Five),
+          Card(Suit.Clubs, Rank.Eight),
           Card(Suit.Diamonds, Rank.Five),
           Card(Suit.Diamonds, Rank.Six),
-          Card(Suit.Diamonds, Rank.Eight),
+          Card(Suit.Diamonds, Rank.Nine),
           Card(Suit.Diamonds, Rank.Jack),
           Card(Suit.Spades, Rank.Three),
-          Card(Suit.Spades, Rank.Six),
           Card(Suit.Spades, Rank.Eight),
           Card(Suit.Spades, Rank.Queen)
         )
