@@ -1,6 +1,6 @@
 val scala3Version = "3.3.1"
-val akkaVersion = "2.8.5"
-val akkaHttpVersion = "10.5.3"
+val akkaVersion = "2.6.21"
+val akkaHttpVersion = "10.2.10"
 
 import ai.kien.python.Python
 import sys.process._
@@ -25,22 +25,24 @@ lazy val root = project
 
     libraryDependencies ++= Seq(
       "org.scalameta"     %% "munit"                    % "0.7.29"        % Test,
-      "com.typesafe.akka" %% "akka-http-testkit"        % akkaHttpVersion % Test,
-      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion     % Test,
+      ("com.typesafe.akka" %% "akka-http-testkit"        % akkaHttpVersion % Test).cross(CrossVersion.for3Use2_13),
+      ("com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion     % Test).cross(CrossVersion.for3Use2_13),
     ),
 
     libraryDependencies ++= Seq(      
-      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-stream-typed" % akkaVersion,
+      ("com.typesafe.akka" %% "akka-actor-typed" % akkaVersion).cross(CrossVersion.for3Use2_13),
+      ("com.typesafe.akka" %% "akka-stream-typed" % akkaVersion).cross(CrossVersion.for3Use2_13),
       
-      "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
+      ("com.typesafe.akka" %% "akka-http" % akkaHttpVersion).cross(CrossVersion.for3Use2_13),
+      ("com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion).cross(CrossVersion.for3Use2_13),
 
       "com.google.firebase" % "firebase-admin" % "9.2.0",
 
-      "ch.qos.logback"    % "logback-classic" % "1.4.11",
+      "ch.qos.logback" % "logback-classic" % "1.4.11",
 
       "me.shadaj" %% "scalapy-core" % "0.5.2",
+
+      ("io.cequence" %% "openai-scala-client-stream" % "0.5.0").cross(CrossVersion.for3Use2_13),
     ),
   )
 
