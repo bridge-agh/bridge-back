@@ -32,3 +32,4 @@ metals.sbt
 /.worksheet/
 
 serviceAccountKey.json
+openai-scala-client.conf
