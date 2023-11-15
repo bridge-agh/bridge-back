@@ -64,7 +64,7 @@ class GameSuite extends FunSuite {
     test("special calls py") {
       assertEquals(Pass.py.name.as[String], "PASS")
       assertEquals(Double.py.name.as[String], "DOUBLE")
-      assertEquals(Redouble.py.name.as[String], "DOUBLE")
+      assertEquals(Redouble.py.name.as[String], "REDOUBLE")
     }
 
     test("play py") {
@@ -86,6 +86,7 @@ class GameSuite extends FunSuite {
         Bid(BidLevel.Seven, BidSuit.Spades),
         Bid(BidLevel.Seven, BidSuit.NoTrump),
         Double,
+        Redouble,
         Pass,
         Pass,
         Pass,
@@ -116,13 +117,14 @@ class GameSuite extends FunSuite {
             Bid(BidLevel.Seven, BidSuit.Spades),
             Bid(BidLevel.Seven, BidSuit.NoTrump),
             Double,
+            Redouble,
             Pass,
             Pass,
             Pass
           ),
           bid = Some(Bid(BidLevel.Seven, BidSuit.NoTrump)),
           declarer = Some(PlayerDirection.North),
-          multiplier = 2
+          multiplier = 4
         ),
         game = PlayerObservation.Game(
           roundPlayer = Some(PlayerDirection.South),

@@ -15,6 +15,7 @@ object Call:
       py.name.as[String] match
         case "PASS" => Pass
         case "DOUBLE" => Double 
+        case "REDOUBLE" => Redouble
 
 final case class Bid(level: BidLevel, suit: BidSuit) extends Call:
   def py = BridgePy.bids.TrickBid(suit.py, level.py)
@@ -36,7 +37,7 @@ case object Double extends Call:
   def py = BridgePy.bids.SpecialBid.DOUBLE
 
 case object Redouble extends Call:
-  def py = BridgePy.bids.SpecialBid.DOUBLE
+  def py = BridgePy.bids.SpecialBid.REDOUBLE
 
 final case class Play(card: Card) extends Action:
   def py = card.py
