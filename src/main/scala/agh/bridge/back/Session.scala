@@ -2,6 +2,7 @@ package agh.bridge.back
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
@@ -126,10 +127,16 @@ object Session {
 
   private final case class UserDied(user: User.Actor) extends Command
   private final case class SubscriberDied(subscriber: ActorRef[SessionInfo]) extends Command
+  private case object NotifySubscribers extends Command
 
   given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+  private val notifySubscribersInterval = 2.second
 
-  def apply(id: Id): Behavior[Command] = empty(id)
+  def apply(id: Id): Behavior[Command] =
+    Behaviors.setup { context =>
+      context.scheduleOnce(notifySubscribersInterval, context.self, NotifySubscribers)
+      empty(id)
+    }
 
   private def empty(id: Id): Behavior[Command] =
     Behaviors.setup { context =>
@@ -177,6 +184,11 @@ object Session {
         case SubscriberDied(subscriber) =>
           context.log.error("SubscriberDied: empty session")
           Behaviors.unhandled
+
+        case NotifySubscribers =>
+          context.log.debug("NotifySubscribers")
+          context.scheduleOnce(notifySubscribersInterval, context.self, NotifySubscribers)
+          Behaviors.same
 
         case _: GameCommand =>
           context.log.error("GameCommand: empty session")
@@ -278,6 +290,12 @@ object Session {
           context.log.debug("SubscriberDied")
           lobby(id, state, subs.removed(subscriber))
 
+        case NotifySubscribers =>
+          context.log.debug("NotifySubscribers")
+          context.scheduleOnce(notifySubscribersInterval, context.self, NotifySubscribers)
+          notifySubscribers(subs, state)
+          Behaviors.same
+
         case _: GameCommand =>
           context.log.error("GameCommand: lobby session")
           Behaviors.unhandled
@@ -310,6 +328,7 @@ object Session {
 
         case RemoveUser(user, replyTo) =>
           context.log.debug("RemoveUser - killing game")
+          replyTo ! ()
           Behaviors.stopped
 
         case SetUserReady(user, ready, replyTo) =>
@@ -343,6 +362,12 @@ object Session {
         case SubscriberDied(subscriber) =>
           context.log.debug("SubscriberDied")
           game(id, state, subs.removed(subscriber))
+
+        case NotifySubscribers =>
+          context.log.debug("NotifySubscribers")
+          context.scheduleOnce(notifySubscribersInterval, context.self, NotifySubscribers)
+          notifySubscribers(subs, state)
+          Behaviors.same
       }
     }
 
