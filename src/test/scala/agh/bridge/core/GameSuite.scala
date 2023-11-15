@@ -120,12 +120,12 @@ class GameSuite extends FunSuite {
             Pass,
             Pass
           ),
-          bid = Bid(BidLevel.Seven, BidSuit.NoTrump),
-          declarer = PlayerDirection.North,
+          bid = Some(Bid(BidLevel.Seven, BidSuit.NoTrump)),
+          declarer = Some(PlayerDirection.North),
           multiplier = 2
         ),
         game = PlayerObservation.Game(
-          roundPlayer = PlayerDirection.South,
+          roundPlayer = Some(PlayerDirection.South),
           roundCards = List(
             Card(Suit.Hearts, Rank.Six),
             Card(Suit.Hearts, Rank.Five),

@@ -23,3 +23,9 @@ object PlayerDirection:
     case "E" => PlayerDirection.East
     case "S" => PlayerDirection.South
     case "W" => PlayerDirection.West
+
+  def fromOptional(py: Dynamic): Option[PlayerDirection] =
+    if Dynamic.global.isinstance(py, BridgePy.core.PlayerDirection).as[Boolean] then
+      Some(PlayerDirection(py))
+    else
+      None

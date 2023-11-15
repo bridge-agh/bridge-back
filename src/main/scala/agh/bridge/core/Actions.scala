@@ -23,6 +23,12 @@ object Bid:
   def apply(py: Dynamic): Bid =
     Bid(BidLevel(py.tricks), BidSuit(py.suit))
 
+  def fromOptional(py: Dynamic): Option[Bid] =
+    if Dynamic.global.isinstance(py, BridgePy.bids.TrickBid).as[Boolean] then
+      Some(Bid(BidLevel(py.tricks), BidSuit(py.suit)))
+    else
+      None
+
 case object Pass extends Call:
   def py = BridgePy.bids.SpecialBid.PASS
 

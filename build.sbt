@@ -1,6 +1,6 @@
 val scala3Version = "3.3.1"
-val akkaVersion = "2.6.21"
-val akkaHttpVersion = "10.2.10"
+val akkaVersion = "2.8.5"
+val akkaHttpVersion = "10.5.3"
 
 import ai.kien.python.Python
 import sys.process._
