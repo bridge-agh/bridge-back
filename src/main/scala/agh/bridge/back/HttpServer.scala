@@ -222,28 +222,8 @@ object HttpServer {
   // POST /session/game/play
   // play an action in the game the logged in user is in
 
-  private final case class PlayActionRequest(suit: String, rank: String):
-    def action: Core.Action =
-      val suit_ = suit match
-        case "clubs" => Core.Suit.Clubs
-        case "diamonds" => Core.Suit.Diamonds
-        case "hearts" => Core.Suit.Hearts
-        case "spades" => Core.Suit.Spades
-      val rank_ = rank match
-        case "2" => Core.Rank.Two
-        case "3" => Core.Rank.Three
-        case "4" => Core.Rank.Four
-        case "5" => Core.Rank.Five
-        case "6" => Core.Rank.Six
-        case "7" => Core.Rank.Seven
-        case "8" => Core.Rank.Eight
-        case "9" => Core.Rank.Nine
-        case "10" => Core.Rank.Ten
-        case "jack" => Core.Rank.Jack
-        case "queen" => Core.Rank.Queen
-        case "king" => Core.Rank.King
-        case "ace" => Core.Rank.Ace
-      Core.Play(Core.Card(suit_, rank_))
+  private final case class PlayActionRequest(suit: Core.Suit, rank: Core.Rank):
+    def action: Core.Action = Core.Play(Core.Card(suit, rank))
   private given RootJsonFormat[PlayActionRequest] = jsonFormat2(PlayActionRequest.apply)
 
   // POST /session/game/pass
