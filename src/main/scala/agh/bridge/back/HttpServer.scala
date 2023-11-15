@@ -193,23 +193,8 @@ object HttpServer {
   // POST /session/game/bid
   // bid in the game the logged in user is in
 
-  private final case class BidRequest(tricks: Int, suit: Int):
-    def action: Core.Action =
-      val level_ = tricks match
-        case 1 => Core.BidLevel.One
-        case 2 => Core.BidLevel.Two
-        case 3 => Core.BidLevel.Three
-        case 4 => Core.BidLevel.Four
-        case 5 => Core.BidLevel.Five
-        case 6 => Core.BidLevel.Six
-        case 7 => Core.BidLevel.Seven
-      val suit_ = suit match
-        case 0 => Core.BidSuit.Clubs
-        case 1 => Core.BidSuit.Diamonds
-        case 2 => Core.BidSuit.Hearts
-        case 3 => Core.BidSuit.Spades
-        case 4 => Core.BidSuit.NoTrump
-      Core.Bid(level_, suit_)
+  private final case class BidRequest(tricks: Core.BidLevel, suit: Core.BidSuit):
+    def action: Core.Action = Core.Bid(tricks, suit)
   private given RootJsonFormat[BidRequest] = jsonFormat2(BidRequest.apply)
 
 
