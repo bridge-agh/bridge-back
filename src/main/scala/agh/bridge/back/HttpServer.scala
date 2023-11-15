@@ -140,15 +140,15 @@ object GameStateModels {
   given RootJsonFormat[GameState] = jsonFormat3(GameState.apply)
 
   object GameState {
-    def apply(info: Session.SessionInfo): Option[GameState] =
+    def apply(userId: User.Id, info: Session.SessionInfo): Option[GameState] =
       for
         observation <- info.playerObservation
       yield
         GameState(
           base = BaseObservation(
             game_stage = observation.gameStage,
-            current_player = ???,
-            user_direction = ???,
+            current_player = observation.currentPlayer,
+            user_direction = info.users.find(_.id == userId).get.position,
           ),
           bidding = BiddingObservation(
             first_dealer = observation.bidding.firstDealer,
@@ -288,7 +288,7 @@ object HttpServer {
                           info.host,
                           info.users map { user => PlayerModel(user.id, user.ready, user.position.ordinal) },
                           info.started,
-                          GameStateModels.GameState(info),
+                          GameStateModels.GameState(userId, info),
                         )
                         ws.TextMessage(resp.toJson.compactPrint)
                       }.mapMaterializedValue(backend ! Backend.SubscribeToSessionInfo(sessionId, _))
