@@ -113,8 +113,8 @@ object Session {
   sealed trait Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
   final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
-  final case class GetInfo(replyTo: ActorRef[SessionInfo]) extends Command
-  final case class AddSubscriber(replyTo: ActorRef[SessionInfo]) extends Command
+  final case class GetInfo(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
+  final case class AddSubscriber(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
 
   sealed trait LobbyCommand extends Command
   final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends LobbyCommand
@@ -143,7 +143,7 @@ object Session {
           val state = SessionState(user)
           context.watchWith(user, UserDied(user))
           replyTo ! Right(())
-          lobby(id, state, Nil)
+          lobby(id, state, Map.empty)
 
         case RemoveUser(user, replyTo) =>
           context.log.error("RemoveUser: no users")
@@ -157,7 +157,7 @@ object Session {
           context.log.error("ForceSwap: no users")
           Behaviors.unhandled
 
-        case GetInfo(replyTo) =>
+        case GetInfo(user, replyTo) =>
           context.log.error("GetInfo: empty session")
           Behaviors.unhandled
 
@@ -170,7 +170,7 @@ object Session {
           context.log.error("UserDied - no users")
           Behaviors.unhandled
 
-        case AddSubscriber(replyTo) =>
+        case AddSubscriber(user, replyTo) =>
           context.log.error("AddSubscriber: empty session")
           Behaviors.unhandled
 
@@ -184,7 +184,7 @@ object Session {
       }
     }
 
-  private def lobby(id: Id, state: SessionState, subs: List[ActorRef[SessionInfo]]): Behavior[Command] =
+  private def lobby(id: Id, state: SessionState, subs: Map[ActorRef[SessionInfo], User.Actor]): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
@@ -244,9 +244,9 @@ object Session {
           notifySubscribers(subs, newState)
           lobby(id, newState, subs)
 
-        case GetInfo(replyTo) =>
+        case GetInfo(user, replyTo) =>
           context.log.debug("GetInfo")
-          sendInfo(replyTo, state)
+          sendInfo(user, replyTo, state)
           Behaviors.same
 
         case GetId(replyTo) =>
@@ -268,15 +268,15 @@ object Session {
           context.log.error("UserDied - user not in session")
           Behaviors.unhandled
 
-        case AddSubscriber(replyTo) =>
+        case AddSubscriber(user, replyTo) =>
           context.log.debug("AddSubscriber")
           context.watchWith(replyTo, SubscriberDied(replyTo))
-          sendInfo(replyTo, state)
-          lobby(id, state, replyTo :: subs)
+          sendInfo(user, replyTo, state)
+          lobby(id, state, subs + (replyTo -> user))
 
         case SubscriberDied(subscriber) =>
           context.log.debug("SubscriberDied")
-          lobby(id, state, subs.filterNot(_ == subscriber))
+          lobby(id, state, subs.removed(subscriber))
 
         case _: GameCommand =>
           context.log.error("GameCommand: lobby session")
@@ -284,7 +284,7 @@ object Session {
       }
     }
 
-  private def game(id: Id, state: SessionState, subs: List[ActorRef[SessionInfo]]): Behavior[Command] =
+  private def game(id: Id, state: SessionState, subs: Map[ActorRef[SessionInfo], User.Actor]): Behavior[Command] =
     Behaviors.setup { context =>
       given ActorSystem[_] = context.system
       given ExecutionContext = context.executionContext
@@ -320,9 +320,9 @@ object Session {
           context.log.error("ForceSwap - game already started")
           Behaviors.unhandled
 
-        case GetInfo(replyTo) =>
+        case GetInfo(user, replyTo) =>
           context.log.debug("GetInfo")
-          sendInfo(replyTo, state)
+          sendInfo(user, replyTo, state)
           Behaviors.same
 
         case GetId(replyTo) =>
@@ -334,19 +334,19 @@ object Session {
           context.log.error("UserDied - killing game")
           Behaviors.stopped
 
-        case AddSubscriber(replyTo) =>
+        case AddSubscriber(user, replyTo) =>
           context.log.debug("AddSubscriber")
           context.watchWith(replyTo, SubscriberDied(replyTo))
-          sendInfo(replyTo, state)
-          game(id, state, replyTo :: subs)
+          sendInfo(user, replyTo, state)
+          game(id, state, subs + (replyTo -> user))
 
         case SubscriberDied(subscriber) =>
           context.log.debug("SubscriberDied")
-          game(id, state, subs.filterNot(_ == subscriber))
+          game(id, state, subs.removed(subscriber))
       }
     }
 
-  private def sendInfo(replyTo: ActorRef[SessionInfo], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
+  private def sendInfo(user: User.Actor, replyTo: ActorRef[SessionInfo], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
     val host = state.lobby.host
     val ready = state.lobby.users.values.map(_.ready)
     val position = state.lobby.users.values.map(_.position)
@@ -362,10 +362,10 @@ object Session {
           PlayerInfo(id, ready, position)
         }.toList,
         state.lobby.allReady,
-        state.playerObservation(host),
+        state.playerObservation(user),
       )
       replyTo ! info
 
-  private def notifySubscribers(subs: List[ActorRef[SessionInfo]], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
-    subs.foreach(sendInfo(_, state))
+  private def notifySubscribers(subs: Map[ActorRef[SessionInfo], User.Actor], state: SessionState)(using ActorSystem[_], ExecutionContext): Unit =
+    subs.foreach((replyTo, user) => sendInfo(user, replyTo, state))
 }

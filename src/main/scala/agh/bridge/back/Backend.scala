@@ -34,8 +34,8 @@ object Backend {
   final case class PlayAction(userId: User.Id, action: Core.Action, replyTo: ActorRef[Either[UserNotInSession | IllegalAction, Unit]]) extends UserCommand
 
   sealed trait SessionCommand extends Command
-  final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
-  final case class SubscribeToSessionInfo(sessionId: Session.Id, subscriber: ActorRef[Session.SessionInfo]) extends SessionCommand
+  final case class GetLobbyInfo(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
+  final case class SubscribeToSessionInfo(sessionId: Session.Id, userId: User.Id, subscriber: ActorRef[Session.SessionInfo]) extends SessionCommand
 
   sealed trait LobbyCommand extends SessionCommand
   final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends LobbyCommand
@@ -131,15 +131,17 @@ object Backend {
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
 
-      case GetLobbyInfo(sessionId, replyTo) =>
+      case GetLobbyInfo(userId, sessionId, replyTo) =>
         context.log.debug("[backend] GetLobbyInfo({})", sessionId)
+        val user = users(userId)
         val sessionOpt = sessions.get(sessionId).toRight(SessionNotFound)
         val lobbyInfoOptFut = sessionOpt match {
-          case Right(session) => session.ask[Session.SessionInfo](Session.GetInfo(_)) map Right.apply
+          case Right(session) => session.ask[Session.SessionInfo](Session.GetInfo(user, _)) map Right.apply
           case Left(_) => Future.successful(Left(SessionNotFound))
         }
         lobbyInfoOptFut map (replyTo ! _)
-        Behaviors.same
+        if (users contains userId) Behaviors.same
+        else backend(users + (userId -> user), sessions)
 
       case ForceSwap(sessionId, first, second, replyTo) =>
         context.log.debug("[backend] ForceSwap({}, {}, {})", sessionId, first, second)
@@ -187,11 +189,13 @@ object Backend {
         context.log.debug("[backend] SessionDied({})", sessionId)
         backend(users, sessions - sessionId)
 
-      case SubscribeToSessionInfo(sessionId, subscriber) =>
+      case SubscribeToSessionInfo(sessionId, userId, subscriber) =>
         context.log.debug("[backend] SubscribeToSessionInfo({})", sessionId)
+        val user = users(userId)
         val sessionOpt = sessions.get(sessionId).toRight(SessionNotFound)
-        sessionOpt.map(_ ! Session.AddSubscriber(subscriber))
-        Behaviors.same
+        sessionOpt.map(_ ! Session.AddSubscriber(user, subscriber))
+        if (users contains userId) Behaviors.same
+        else backend(users + (userId -> user), sessions)
     }
   }
 }

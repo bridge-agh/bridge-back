@@ -291,7 +291,7 @@ object HttpServer {
                           GameStateModels.GameState(userId, info),
                         )
                         ws.TextMessage(resp.toJson.compactPrint)
-                      }.mapMaterializedValue(backend ! Backend.SubscribeToSessionInfo(sessionId, _))
+                      }.mapMaterializedValue(backend ! Backend.SubscribeToSessionInfo(sessionId, userId, _))
                       val flow = Flow.fromSinkAndSourceCoupledMat(Sink.ignore, source)(Keep.right)
                       handleWebSocketMessages(flow)
                   }
