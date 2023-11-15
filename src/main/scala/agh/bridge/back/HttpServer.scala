@@ -71,9 +71,12 @@ object GameStateModels {
   }
 
   given RootJsonFormat[Core.PairDirection] = new RootJsonFormat[Core.PairDirection] {
-    def write(direction: Core.PairDirection): JsValue = JsString(direction.toString)
+    def write(direction: Core.PairDirection): JsValue = direction match
+      case Core.PairDirection.NorthSouth => JsString("NS")
+      case Core.PairDirection.EastWest => JsString("EW")
     def read(value: JsValue): Core.PairDirection = value match
-      case JsString(str) => Core.PairDirection.valueOf(str)
+      case JsString("NS") => Core.PairDirection.NorthSouth
+      case JsString("EW") => Core.PairDirection.EastWest
       case _ => throw DeserializationException("Expected PairDirection")
   }
 
