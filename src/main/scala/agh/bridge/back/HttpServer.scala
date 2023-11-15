@@ -21,6 +21,7 @@ import spray.json._
 import spray.json.DefaultJsonProtocol._
 import spray.json.RootJsonFormat
 
+import agh.bridge.core as Core
 import agh.bridge.core.PlayerDirection
 import agh.bridge.back.CorsHandler.cors
 import agh.bridge.back.AuthHandler.requireAuthentication
@@ -76,10 +77,79 @@ object HttpServer {
   private given RootJsonFormat[SetUserReadyRequest] = jsonFormat1(SetUserReadyRequest.apply)
 
 
+  // --- /session/game ---
+
+  // POST /session/game/play
+  // play an action in the game the logged in user is in
+
+  private final case class PlayActionRequest(suit: String, rank: String):
+    def action: Core.Action =
+      val suit_ = suit match
+        case "clubs" => Core.Suit.Clubs
+        case "diamonds" => Core.Suit.Diamonds
+        case "hearts" => Core.Suit.Hearts
+        case "spades" => Core.Suit.Spades
+      val rank_ = rank match
+        case "2" => Core.Rank.Two
+        case "3" => Core.Rank.Three
+        case "4" => Core.Rank.Four
+        case "5" => Core.Rank.Five
+        case "6" => Core.Rank.Six
+        case "7" => Core.Rank.Seven
+        case "8" => Core.Rank.Eight
+        case "9" => Core.Rank.Nine
+        case "10" => Core.Rank.Ten
+        case "jack" => Core.Rank.Jack
+        case "queen" => Core.Rank.Queen
+        case "king" => Core.Rank.King
+        case "ace" => Core.Rank.Ace
+      Core.Play(Core.Card(suit_, rank_))
+  private given RootJsonFormat[PlayActionRequest] = jsonFormat2(PlayActionRequest.apply)
+
+  // POST /session/game/pass
+  // pass in the game the logged in user is in
+
+  // POST /session/game/double
+  // double in the game the logged in user is in
+
+  // POST /session/game/redouble
+  // redouble in the game the logged in user is in
+
+  // POST /session/game/bid
+  // bid in the game the logged in user is in
+
+  private final case class BidRequest(tricks: Int, suit: Int):
+    def action: Core.Action =
+      val level_ = tricks match
+        case 1 => Core.BidLevel.One
+        case 2 => Core.BidLevel.Two
+        case 3 => Core.BidLevel.Three
+        case 4 => Core.BidLevel.Four
+        case 5 => Core.BidLevel.Five
+        case 6 => Core.BidLevel.Six
+        case 7 => Core.BidLevel.Seven
+      val suit_ = suit match
+        case 0 => Core.BidSuit.Clubs
+        case 1 => Core.BidSuit.Diamonds
+        case 2 => Core.BidSuit.Hearts
+        case 3 => Core.BidSuit.Spades
+        case 4 => Core.BidSuit.NoTrump
+      Core.Bid(level_, suit_)
+  private given RootJsonFormat[BidRequest] = jsonFormat2(BidRequest.apply)
+
+
   def apply(backend: Backend.Actor): Behavior[Nothing] = Behaviors.setup { context =>
     given ActorSystem[_] = context.system
     given ExecutionContext = context.executionContext
     given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+    def handleAction(userId: User.Id, action: Core.Action) =
+      val resFut = backend.ask[Either[Backend.UserNotInSession | Session.IllegalAction, Unit]](Backend.PlayAction(userId, action, _))
+      complete(resFut map {
+        case Right(()) => StatusCodes.OK
+        case Left(Backend.UserNotInSession) => StatusCodes.NotFound
+        case Left(Session.IllegalAction) => StatusCodes.BadRequest
+      })
 
     val route = cors(
       concat(
@@ -160,27 +230,31 @@ object HttpServer {
                   concat(
                     path("play") {
                       post {
-                        complete(StatusCodes.NotImplemented)
+                        entity(as[PlayActionRequest]) { request =>
+                          handleAction(userId, request.action)
+                        }
                       }
                     },
                     path("pass") {
                       post {
-                        complete(StatusCodes.NotImplemented)
+                        handleAction(userId, Core.Pass)
                       }
                     },
                     path("double") {
                       post {
-                        complete(StatusCodes.NotImplemented)
+                        handleAction(userId, Core.Double)
                       }
                     },
                     path("redouble") {
                       post {
-                        complete(StatusCodes.NotImplemented)
+                        handleAction(userId, Core.Redouble)
                       }
                     },
                     path("bid") {
                       post {
-                        complete(StatusCodes.NotImplemented)
+                        entity(as[BidRequest]) { request =>
+                          handleAction(userId, request.action)
+                        }
                       }
                     },
                   )

@@ -117,7 +117,7 @@ object Session {
   final case class ForceSwap(first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Unit]) extends LobbyCommand
 
   sealed trait GameCommand extends Command
-  final case class PlayAction(action: Core.Action, replyTo: ActorRef[Either[IllegalAction, Unit]]) extends GameCommand
+  final case class PlayAction(user: User.Actor, action: Core.Action, replyTo: ActorRef[Either[IllegalAction, Unit]]) extends GameCommand
 
   private final case class UserDied(user: User.Actor) extends Command
   private final case class SubscriberDied(subscriber: ActorRef[SessionInfo]) extends Command
@@ -286,8 +286,9 @@ object Session {
       context.setLoggerName(s"agh.bridge.back.Session-$id [game]")
       Behaviors.receiveMessage {
 
-        case PlayAction(action, replyTo) =>
+        case PlayAction(user, action, replyTo) =>
           context.log.debug("PlayAction")
+          // TODO: check turn
           state.playAction(action) match
             case Left(IllegalAction) =>
               context.log.error("PlayAction - illegal action")

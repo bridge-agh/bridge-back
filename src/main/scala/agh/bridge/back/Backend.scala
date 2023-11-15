@@ -8,7 +8,7 @@ import akka.actor.typed.{ ActorRef, ActorSystem, Behavior }
 import akka.actor.typed.scaladsl.AskPattern._
 
 import agh.bridge.core.PlayerDirection
-import Session.SessionFull
+import agh.bridge.core as Core
 
 object Backend {
   type Actor = ActorRef[Command]
@@ -19,6 +19,9 @@ object Backend {
   case object UserNotInSession
   type UserNotInSession = UserNotInSession.type
 
+  import Session.SessionFull
+  import Session.IllegalAction
+
   sealed trait Command
 
   sealed trait UserCommand extends Command
@@ -28,6 +31,7 @@ object Backend {
   final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends UserCommand
   final case class JoinLobby(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends UserCommand
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
+  final case class PlayAction(userId: User.Id, action: Core.Action, replyTo: ActorRef[Either[UserNotInSession | IllegalAction, Unit]]) extends UserCommand
 
   sealed trait SessionCommand extends Command
   final case class GetLobbyInfo(sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
@@ -155,6 +159,20 @@ object Backend {
         do
           val res = session match {
             case Some(session) => session.ask[Unit](Session.SetUserReady(user, ready, _)).map(Right.apply)
+            case None => Future.successful(Left(UserNotInSession))
+          }
+          res map (replyTo ! _)
+        if (users contains userId) Behaviors.same
+        else backend(users + (userId -> user), sessions)
+
+      case PlayAction(userId, action, replyTo) =>
+        context.log.debug("[backend] PlayAction({}, {})", userId, action)
+        val user = users(userId)
+        for
+          session <- user.ask[Option[Session.Actor]](User.GetSession(_))
+        do
+          val res = session match {
+            case Some(session) => session.ask[Either[IllegalAction, Unit]](Session.PlayAction(user, action, _))
             case None => Future.successful(Left(UserNotInSession))
           }
           res map (replyTo ! _)
