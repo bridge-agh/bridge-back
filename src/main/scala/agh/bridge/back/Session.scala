@@ -61,10 +61,10 @@ object Session {
   private object GameState:
     def apply(): GameState =
       val impl = Core.Game(0)
-      impl.step(Core.Bid(Core.BidLevel.One, Core.BidSuit.Clubs))
-      impl.step(Core.Pass)
-      impl.step(Core.Pass)
-      impl.step(Core.Pass)
+      // impl.step(Core.Bid(Core.BidLevel.One, Core.BidSuit.Clubs))
+      // impl.step(Core.Pass)
+      // impl.step(Core.Pass)
+      // impl.step(Core.Pass)
       GameState(impl)
 
   private final case class SessionState private(lobby: LobbyState, game: Option[GameState]):
