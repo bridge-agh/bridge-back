@@ -80,7 +80,18 @@ object GameStateModels {
       case _ => throw DeserializationException("Expected PairDirection")
   }
 
-  given RootJsonFormat[Core.Bid] = jsonFormat2(Core.Bid.apply)
+  given RootJsonFormat[Core.Bid] = new RootJsonFormat[Core.Bid] {
+    def write(bid: Core.Bid): JsValue = JsObject(
+      "suit" -> bid.suit.toJson,
+      "tricks" -> bid.level.toJson,
+    )
+    def read(value: JsValue): Core.Bid = value match
+      case obj: JsObject => Core.Bid(
+        suit = obj.fields("suit").convertTo[Core.BidSuit],
+        level = obj.fields("tricks").convertTo[Core.BidLevel],
+      )
+      case _ => throw DeserializationException("Expected Bid")
+  }
 
   given RootJsonFormat[Core.Call] = new RootJsonFormat[Core.Call] {
     def write(call: Core.Call): JsValue = call match
