@@ -82,6 +82,12 @@ object Session {
 
     def playerObservation(player: User.Actor) = game.map(_.impl.playerObservation(directionOf(player)))
 
+    def currentPlayer: Option[User.Actor] =
+      game.flatMap { game =>
+        val direction = game.impl.currentPlayer
+        lobby.users.find(_._2.position == direction).map(_._1)
+      }
+
     def playAction(action: Core.Action): Either[IllegalAction, SessionState] =
       game match
         case Some(game) =>
@@ -311,16 +317,20 @@ object Session {
 
         case PlayAction(user, action, replyTo) =>
           context.log.debug("PlayAction")
-          // TODO: check turn
-          state.playAction(action) match
-            case Left(IllegalAction) =>
-              context.log.error("PlayAction - illegal action")
-              replyTo ! Left(IllegalAction)
-              Behaviors.same
-            case Right(newState) =>
-              replyTo ! Right(())
-              notifySubscribers(subs, newState)
-              game(id, newState, subs)
+          if Some(user) != state.currentPlayer then
+            context.log.error("PlayAction - not current player")
+            replyTo ! Left(IllegalAction)
+            Behaviors.same
+          else
+            state.playAction(action) match
+              case Left(IllegalAction) =>
+                context.log.error("PlayAction - illegal action")
+                replyTo ! Left(IllegalAction)
+                Behaviors.same
+              case Right(newState) =>
+                replyTo ! Right(())
+                notifySubscribers(subs, newState)
+                game(id, newState, subs)
 
         case AddUser(user, replyTo) =>
           context.log.error("AddUser - game already started")
