@@ -324,20 +324,20 @@ object Session {
 
         case PlayAction(user, action, replyTo) =>
           context.log.debug("PlayAction")
-          if Some(user) != state.currentPlayer then
-            context.log.error("PlayAction - not current player")
-            replyTo ! Left(IllegalAction)
-            Behaviors.same
-          else
-            state.playAction(action) match
-              case Left(IllegalAction) =>
-                context.log.error("PlayAction - illegal action")
-                replyTo ! Left(IllegalAction)
-                Behaviors.same
-              case Right(newState) =>
-                replyTo ! Right(())
-                notifySubscribers(subs, newState)
-                game(id, newState, subs)
+          // if Some(user) != state.currentPlayer then
+          //   context.log.error("PlayAction - not current player")
+          //   replyTo ! Left(IllegalAction)
+          //   Behaviors.same
+          // else
+          state.playAction(action) match
+            case Left(IllegalAction) =>
+              context.log.error("PlayAction - illegal action")
+              replyTo ! Left(IllegalAction)
+              Behaviors.same
+            case Right(newState) =>
+              replyTo ! Right(())
+              notifySubscribers(subs, newState)
+              game(id, newState, subs)
 
         case AddUser(user, replyTo) =>
           context.log.error("AddUser - game already started")
