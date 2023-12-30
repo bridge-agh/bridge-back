@@ -194,14 +194,32 @@ object HttpServer {
   // GET /session/info
   // get info about the session the logged in user is in
 
-  private final case class PlayerModel(id: User.Id, ready: Boolean, position: Int)
-  private given RootJsonFormat[PlayerModel] = jsonFormat3(PlayerModel.apply)
+  private final case class PlayerModel(
+    id: User.Id,
+    ready: Boolean,
+    position: Int,
+    displayName: Option[String],
+    isHuman: Boolean,
+  )
+  private given RootJsonFormat[PlayerModel] = jsonFormat5(PlayerModel.apply)
 
-  private final case class GetSessionInfoResponse(sessionId: Session.Id, hostId: User.Id, users: List[PlayerModel], started: Boolean, gameState: Option[GameStateModels.GameState])
-  private given RootJsonFormat[GetSessionInfoResponse] = jsonFormat5(GetSessionInfoResponse.apply)
+  private final case class GetSessionInfoResponse(
+    sessionId: Session.Id,
+    hostId: User.Id,
+    users: List[PlayerModel],
+    started: Boolean,
+    gameState: Option[GameStateModels.GameState],
+    assistantLevel: Int,
+  )
+  private given RootJsonFormat[GetSessionInfoResponse] = jsonFormat6(GetSessionInfoResponse.apply)
 
   // POST /session/leave
   // leave the session the logged in user is in
+
+  // POST /session/set-ai-level
+  // set the AI level in the user's session
+
+  // TODO
 
 
   // --- /session/lobby ---
@@ -224,11 +242,26 @@ object HttpServer {
   private final case class ForceSwapRequest(first: Int, second: Int)
   private given RootJsonFormat[ForceSwapRequest] = jsonFormat2(ForceSwapRequest.apply)
 
+  // POST /session/lobby/promote-host
+  // promote the specified player to be the host of the game the logged in user is in
+
+  // TODO
+
+  // POST /session/lobby/set-assistant
+  // set the specified position to be an AI assistant in the game the logged in user is in
+
+  // TODO
+
   // POST /session/lobby/ready
   // set the ready status of the logged in user in his game
 
   private final case class SetUserReadyRequest(ready: Boolean)
   private given RootJsonFormat[SetUserReadyRequest] = jsonFormat1(SetUserReadyRequest.apply)
+
+  // POST /session/lobby/kick
+  // kick the specified player from the game the logged in user is in
+
+  // TODO
 
 
   // --- /session/game ---
@@ -297,9 +330,16 @@ object HttpServer {
                         val resp = GetSessionInfoResponse(
                           sessionId,
                           info.host,
-                          info.users map { user => PlayerModel(user.id, user.ready, user.position.ordinal) },
+                          info.users map { user => PlayerModel(
+                            user.id,
+                            user.ready,
+                            user.position.ordinal,
+                            Some(s"User ${user.position.toString()}"),
+                            user.isHuman,
+                          ) },
                           info.started,
                           GameStateModels.GameState(userId, info),
+                          info.assistantLevel,
                         )
                         ws.TextMessage(resp.toJson.compactPrint)
                       }.mapMaterializedValue(backend ! Backend.SubscribeToSessionInfo(sessionId, userId, _))

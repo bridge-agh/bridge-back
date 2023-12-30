@@ -15,26 +15,26 @@ object Session {
   type Actor = ActorRef[Command]
   type Id = String
 
-  private final case class LobbyUserState private(ready: Boolean, position: PlayerDirection):
-    def setReady(ready: Boolean) = LobbyUserState(ready, position)
+  private final case class LobbyUserState private(ready: Boolean, position: PlayerDirection, isHuman: Boolean):
+    def setReady(ready: Boolean) = LobbyUserState(ready, position, isHuman)
 
-    def setPosition(position: PlayerDirection) = LobbyUserState(ready, position)
+    def setPosition(position: PlayerDirection) = LobbyUserState(ready, position, isHuman)
 
   private object LobbyUserState:
-    def apply(position: PlayerDirection): LobbyUserState = LobbyUserState(false, position)
+    def apply(position: PlayerDirection, isHuman: Boolean): LobbyUserState = LobbyUserState(false, position, isHuman)
 
-  private final case class LobbyState private(host: User.Actor, users: Map[User.Actor, LobbyUserState]):
+  private final case class LobbyState private(host: User.Actor, users: Map[User.Actor, LobbyUserState], assistantLevel: Int):
     def addUser(user: User.Actor) =
       val direction = (PlayerDirection.values diff users.values.map(_.position).toSeq).head
-      LobbyState(host, users + (user -> LobbyUserState(direction)))
+      LobbyState(host, users + (user -> LobbyUserState(direction, true)), assistantLevel)
 
     def removeUser(user: User.Actor) =
       val newUsers = users - user
       val newHost = if (user == host) newUsers.keys.head else host
-      LobbyState(newHost, newUsers)
+      LobbyState(newHost, newUsers, assistantLevel)
 
     def setReady(user: User.Actor, ready: Boolean) =
-      LobbyState(host, users.updated(user, users(user).setReady(ready)))
+      LobbyState(host, users.updated(user, users(user).setReady(ready)), assistantLevel)
 
     def forceSwap(first: PlayerDirection, second: PlayerDirection) =
       LobbyState(
@@ -45,13 +45,14 @@ object Session {
             case `second` => first
             case other => other
           user.setPosition(newPosition)
-        }.toMap
+        }.toMap,
+        assistantLevel,
       )
 
     def allReady = users.size == 4 && users.values.forall(_.ready)
 
   private object LobbyState {
-    def apply(host: User.Actor): LobbyState = LobbyState(host, Map(host -> LobbyUserState(PlayerDirection.North)))
+    def apply(host: User.Actor): LobbyState = LobbyState(host, Map(host -> LobbyUserState(PlayerDirection.North, true)), 0)
   }
 
   private final case class GameState private(
@@ -109,12 +110,18 @@ object Session {
   case object IllegalAction
   type IllegalAction = IllegalAction.type
 
-  final case class PlayerInfo(id: User.Id, ready: Boolean, position: PlayerDirection)
+  final case class PlayerInfo(
+    id: User.Id,
+    ready: Boolean,
+    position: PlayerDirection,
+    isHuman: Boolean,
+  )
   final case class SessionInfo(
     host: User.Id,
     users: List[PlayerInfo],
     started: Boolean,
     playerObservation: Option[Core.PlayerObservation],
+    assistantLevel: Int,
   )
 
   sealed trait Command
@@ -385,6 +392,7 @@ object Session {
     val host = state.lobby.host
     val ready = state.lobby.users.values.map(_.ready)
     val position = state.lobby.users.values.map(_.position)
+    val isHuman = state.lobby.users.values.map(_.isHuman)
     for
       hostId <- host.ask[User.Id](User.GetId(_))
       playerIds <- Future.sequence(state.lobby.users.keys.map { user =>
@@ -393,11 +401,12 @@ object Session {
     do
       val info = SessionInfo(
         hostId,
-        (playerIds zip ready zip position).map { case ((id, ready), position) =>
-          PlayerInfo(id, ready, position)
+        (playerIds zip ready zip position zip isHuman).map { case (((id, ready), position), isHuman) =>
+          PlayerInfo(id, ready, position, isHuman)
         }.toList,
         state.lobby.allReady,
         state.playerObservation(user),
+        state.lobby.assistantLevel,
       )
       replyTo ! info
 
