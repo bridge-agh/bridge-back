@@ -34,6 +34,7 @@ object Backend {
   final case class KickUser(userId: User.Id, kickId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
   final case class PlayAction(userId: User.Id, action: Core.Action, replyTo: ActorRef[Either[UserNotInSession | IllegalAction, Unit]]) extends UserCommand
   final case class SetUserAsAssistant(userId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
+  final case class PromoteUserToHost(promoterId: User.Id, promoteeId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
 
   sealed trait SessionCommand extends Command
   final case class GetLobbyInfo(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
@@ -277,6 +278,21 @@ object Backend {
           res map (replyTo ! _)
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
+
+      case PromoteUserToHost(promoterId, promoteeId, replyTo) =>
+        context.log.debug("[backend] PromoteUserToHost({}, {})", promoterId, promoteeId)
+        val promoter = users(promoterId)
+        val promotee = users(promoteeId)
+        for
+          session <- promoter.ask[Option[Session.Actor]](User.GetSession(_))
+        do
+          val res = session match {
+            case Some(session) => session.ask[Either[UserNotInSession, Unit]](Session.PromoteUserToHost(promoter, promotee, _))
+            case None => Future.successful(Left(UserNotInSession))
+          }
+          res map (replyTo ! _)
+        if (users contains promoterId) Behaviors.same
+        else backend(users + (promoterId -> promoter), sessions)
     }
   }
 }

@@ -38,6 +38,9 @@ object Session {
     def setReady(user: User.Actor, ready: Boolean) =
       LobbyState(host, users.updated(user, users(user).setReady(ready)), assistantLevel)
 
+    def promoteUserToHost(user: User.Actor) =
+      LobbyState(user, users, assistantLevel)
+
     def forceSwap(first: PlayerDirection, second: PlayerDirection) =
       LobbyState(
         host,
@@ -90,6 +93,8 @@ object Session {
     def directionOf(user: User.Actor) = lobby.users(user).position
 
     def startGame() = SessionState(lobby, Some(GameState()))
+
+    def promoteUserToHost(user: User.Actor) = SessionState(lobby.promoteUserToHost(user), game)
 
     def playerObservation(player: User.Actor) = game.map(_.impl.playerObservation(directionOf(player)))
 
@@ -147,6 +152,7 @@ object Session {
   final case class SetUserReady(user: User.Actor, ready: Boolean, replyTo: ActorRef[Unit]) extends LobbyCommand
   final case class ForceSwap(first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Unit]) extends LobbyCommand
   final case class SetAssistantLevel(level: Int, replyTo: ActorRef[Unit]) extends LobbyCommand
+  final case class PromoteUserToHost(promoter: User.Actor, promotee: User.Actor, replyTo: ActorRef[Either[Backend.UserNotInSession, Unit]]) extends LobbyCommand
 
   sealed trait GameCommand extends Command
   final case class PlayAction(user: User.Actor, action: Core.Action, replyTo: ActorRef[Either[IllegalAction, Unit]]) extends GameCommand
@@ -230,6 +236,10 @@ object Session {
 
         case _: GameCommand =>
           context.log.error("GameCommand: empty session")
+          Behaviors.unhandled
+
+        case PromoteUserToHost(promoter, promotee, replyTo) =>
+          context.log.error("PromoteUserToHost: empty session")
           Behaviors.unhandled
       }
     }
@@ -364,6 +374,18 @@ object Session {
         case _: GameCommand =>
           context.log.error("GameCommand: lobby session")
           Behaviors.unhandled
+
+        case PromoteUserToHost(promoter, promotee, replyTo) if promoter == state.lobby.host && state.lobby.users.contains(promotee) =>
+          context.log.debug("PromoteUserToHost")
+          val newState = state.promoteUserToHost(promotee)
+          replyTo ! Right(())
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
+
+        case PromoteUserToHost(promoter, promotee, replyTo) =>
+          context.log.error("PromoteUserToHost - bad conditions")
+          replyTo ! Left(Backend.UserNotInSession)
+          Behaviors.same
       }
     }
 
@@ -466,6 +488,10 @@ object Session {
           context.scheduleOnce(notifySubscribersInterval, context.self, NotifySubscribers)
           notifySubscribers(subs, state)
           Behaviors.same
+
+        case PromoteUserToHost(promoter, promotee, replyTo) =>
+          context.log.error("PromoteUserToHost - game already started")
+          Behaviors.unhandled
       }
     }
 

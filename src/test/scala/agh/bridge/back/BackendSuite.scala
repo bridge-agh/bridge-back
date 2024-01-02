@@ -335,4 +335,29 @@ class BackendSuite extends FunSuite {
         )
       ))
   }
+
+  backendTestKit.test("promote to host") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
+      joinRes <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby("u2", sessionId, _))
+      promoteRes <- backend.ask[Either[Backend.SessionNotFound | Backend.UserNotInSession, Unit]](Backend.PromoteUserToHost("u1", "u2", _))
+      infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("u1", sessionId, _))
+    yield
+      assert(sessionId.nonEmpty)
+      assertEquals(joinRes, Right(()))
+      assertEquals(promoteRes, Right(()))
+      assertEquals(infoOpt, Right(
+        Session.SessionInfo(
+          "u2",
+          List(
+            Session.PlayerInfo("u1", false, PlayerDirection.North, true),
+            Session.PlayerInfo("u2", false, PlayerDirection.East, true),
+          ),
+          false,
+          None,
+          1,
+        )
+      ))
+  }
 }

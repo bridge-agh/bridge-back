@@ -94,7 +94,8 @@ object HttpServer {
   // POST /session/lobby/promote-host
   // promote the specified player to be the host of the game the logged in user is in
 
-  // TODO
+  private final case class PromoteHostRequest(userId: User.Id)
+  private given RootJsonFormat[PromoteHostRequest] = jsonFormat1(PromoteHostRequest.apply)
 
   // POST /session/lobby/set-assistant
   // set the specified position to be an AI assistant in the game the logged in user is in
@@ -240,9 +241,12 @@ object HttpServer {
                           })
                       }
                     },
-                    (path("promote-host") & post) {
-                      // TODO
-                      complete(StatusCodes.NotImplemented)
+                    (path("promote-host") & post & entity(as[PromoteHostRequest])) { request =>
+                      val resFut = backend.ask[Either[Backend.UserNotInSession, Unit]](Backend.PromoteUserToHost(userId, request.userId, _))
+                      complete(resFut map {
+                        case Right(()) => StatusCodes.OK
+                        case Left(Backend.UserNotInSession) => StatusCodes.NotFound
+                      })
                     },
                     (path("set-assistant") & post & entity(as[SetAssistantRequest])) { request =>
                       val sessionIdFut = backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession(userId, _))
