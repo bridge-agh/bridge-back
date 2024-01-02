@@ -92,6 +92,8 @@ object Session {
 
     def directionOf(user: User.Actor) = lobby.users(user).position
 
+    def isTerminal = game.exists(_.impl.playerObservation(PlayerDirection.North).gameStage == Core.GameStage.Scoring)
+
     def startGame() = SessionState(lobby, Some(GameState()))
 
     def promoteUserToHost(user: User.Actor) = SessionState(lobby.promoteUserToHost(user), game)
@@ -412,11 +414,15 @@ object Session {
             case Right(newState) =>
               replyTo ! Right(())
               notifySubscribers(subs, newState)
-              if (!state.lobby.users(newState.currentPlayer.get).isHuman) {
-                context.log.debug("Next player is assistant")
-                context.scheduleOnce(1.second, context.self, PlayAction(newState.currentPlayer.get, Core.AssistantAction, context.system.ignoreRef))
-              }
-              game(id, newState, subs)
+              if newState.isTerminal then
+                context.log.debug("PlayAction - game ended")
+                lobby(id, newState, subs)
+              else
+                if (!state.lobby.users(newState.currentPlayer.get).isHuman) {
+                  context.log.debug("Next player is assistant")
+                  context.scheduleOnce(1.second, context.self, PlayAction(newState.currentPlayer.get, Core.AssistantAction, context.system.ignoreRef))
+                }
+                game(id, newState, subs)
 
         case AddUser(user, replyTo) =>
           context.log.error("AddUser - game already started")
