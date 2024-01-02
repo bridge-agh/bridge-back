@@ -39,6 +39,7 @@ object Backend {
 
   sealed trait LobbyCommand extends SessionCommand
   final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends LobbyCommand
+  final case class SetAssistantLevel(sessionId: Session.Id, level: Int, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends LobbyCommand
 
   private final case class UserDied(userId: User.Id) extends Command
   private final case class SessionDied(sessionId: Session.Id) extends Command
@@ -151,6 +152,16 @@ object Backend {
           case None => Future.successful(Left(SessionNotFound))
         }
         swapResultFut map (replyTo ! _)
+        Behaviors.same
+
+      case SetAssistantLevel(sessionId, level, replyTo) =>
+        context.log.debug("[backend] SetAssistantLevel({}, {})", sessionId, level)
+        val sessionOpt = sessions.get(sessionId)
+        val setLevelResultFut = sessionOpt match {
+          case Some(session) => session.ask[Unit](Session.SetAssistantLevel(level, _)).map(Right.apply)
+          case None => Future.successful(Left(SessionNotFound))
+        }
+        setLevelResultFut map (replyTo ! _)
         Behaviors.same
 
       case SetUserReady(userId, ready, replyTo) =>

@@ -67,7 +67,8 @@ object HttpServer {
   // POST /session/set-ai-level
   // set the AI level in the user's session
 
-  // TODO
+  private final case class SetAssistantLevelRequest(level: Int)
+  private given RootJsonFormat[SetAssistantLevelRequest] = jsonFormat1(SetAssistantLevelRequest.apply)
 
 
   // --- /session/lobby ---
@@ -198,6 +199,18 @@ object HttpServer {
                 (path("leave") & post) {
                   val resFut = backend.ask[Unit](Backend.LeaveSession(userId, _))
                   complete(resFut map (_ => StatusCodes.OK))
+                },
+                (path("set-ai-level") & post & entity(as[SetAssistantLevelRequest])) { request =>
+                  val sessionIdFut = backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession(userId, _))
+                  onSuccess(sessionIdFut) {
+                    case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
+                    case Right(sessionId) =>
+                      val resFut = backend.ask[Either[Backend.SessionNotFound, Unit]](Backend.SetAssistantLevel(sessionId, request.level, _))
+                      complete(resFut map {
+                        case Right(()) => StatusCodes.OK
+                        case Left(Backend.SessionNotFound) => StatusCodes.NotFound
+                      })
+                  }
                 },
                 pathPrefix("lobby") {
                   concat(

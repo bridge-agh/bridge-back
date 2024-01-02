@@ -31,7 +31,7 @@ class BackendSuite extends FunSuite {
       sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
       infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("host", sessionId, _))
     yield
-      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 0)))
+      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 1)))
   }
 
   backendTestKit.test("find session") { (testKit, backend) =>
@@ -51,7 +51,7 @@ class BackendSuite extends FunSuite {
       infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("host", sessionId, _))
     yield
       assertEquals(joinResult, Right(()))
-      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true), Session.PlayerInfo("guest", false, PlayerDirection.East, true)), false, None, 0)))
+      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true), Session.PlayerInfo("guest", false, PlayerDirection.East, true)), false, None, 1)))
   }
 
   backendTestKit.test("leave lobby") { (testKit, backend) =>
@@ -65,7 +65,7 @@ class BackendSuite extends FunSuite {
       assert(sessionId.nonEmpty)
       assertEquals(joinRes, Right(()))
       assertEquals(leaveRes, ())
-      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 0)))
+      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 1)))
   }
 
   backendTestKit.test("set ready") { (testKit, backend) =>
@@ -82,11 +82,11 @@ class BackendSuite extends FunSuite {
     yield
       assertEquals(joinRes, Right(()))
       assertEquals(readyRes1, Right(()))
-      assertEquals(infoOpt1, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true), Session.PlayerInfo("guest", true, PlayerDirection.East, true)), false, None, 0)))
+      assertEquals(infoOpt1, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true), Session.PlayerInfo("guest", true, PlayerDirection.East, true)), false, None, 1)))
       assertEquals(readyRes2, Right(()))
-      assertEquals(infoOpt2, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", true, PlayerDirection.North, true), Session.PlayerInfo("guest", true, PlayerDirection.East, true)), false, None, 0)))
+      assertEquals(infoOpt2, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", true, PlayerDirection.North, true), Session.PlayerInfo("guest", true, PlayerDirection.East, true)), false, None, 1)))
       assertEquals(readyRes3, Right(()))
-      assertEquals(infoOpt3, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", true, PlayerDirection.North, true), Session.PlayerInfo("guest", false, PlayerDirection.East, true)), false, None, 0)))
+      assertEquals(infoOpt3, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", true, PlayerDirection.North, true), Session.PlayerInfo("guest", false, PlayerDirection.East, true)), false, None, 1)))
   }
 
   backendTestKit.test("create lobby when in lobby") { (testKit, backend) =>
@@ -100,7 +100,7 @@ class BackendSuite extends FunSuite {
     yield
       assertEquals(foundSessionId, Right(sessionId2))
       assertEquals(infoOpt1, Left(Backend.SessionNotFound))
-      assertEquals(infoOpt2, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 0)))
+      assertEquals(infoOpt2, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 1)))
   }
 
   backendTestKit.test("join lobby when in lobby") { (testKit, backend) =>
@@ -115,7 +115,7 @@ class BackendSuite extends FunSuite {
     yield
       assertEquals(foundSessionId, Right(sessionId2))
       assertEquals(infoOpt1, Left(Backend.SessionNotFound))
-      assertEquals(infoOpt2, Right(Session.SessionInfo("user2", List(Session.PlayerInfo("user2", false, PlayerDirection.North, true), Session.PlayerInfo("user1", false, PlayerDirection.East, true)), false, None, 0)))
+      assertEquals(infoOpt2, Right(Session.SessionInfo("user2", List(Session.PlayerInfo("user2", false, PlayerDirection.North, true), Session.PlayerInfo("user1", false, PlayerDirection.East, true)), false, None, 1)))
   }
 
   backendTestKit.test("session deletes when all leave") { (testKit, backend) =>
@@ -155,7 +155,7 @@ class BackendSuite extends FunSuite {
           ),
           false,
           None,
-          0,
+          1,
         )
       ))
   }
@@ -183,7 +183,7 @@ class BackendSuite extends FunSuite {
           ),
           false,
           None,
-          0,
+          1,
         )
       ))
       assertEquals(swapRes, Right(()))
@@ -197,7 +197,37 @@ class BackendSuite extends FunSuite {
           ),
           false,
           None,
-          0,
+          1,
+        )
+      ))
+  }
+
+  backendTestKit.test("set assistant level") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
+      infoOpt1 <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("host", sessionId, _))
+      setLevelRes <- backend.ask[Either[Backend.SessionNotFound, Unit]](Backend.SetAssistantLevel(sessionId, 3, _))
+      infoOpt2 <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("host", sessionId, _))
+    yield
+      assert(sessionId.nonEmpty)
+      assertEquals(infoOpt1, Right(
+        Session.SessionInfo(
+          "host",
+          List(Session.PlayerInfo("host", false, PlayerDirection.North, true)),
+          false,
+          None,
+          1,
+        )
+      ))
+      assertEquals(setLevelRes, Right(()))
+      assertEquals(infoOpt2, Right(
+        Session.SessionInfo(
+          "host", 
+          List(Session.PlayerInfo("host", false, PlayerDirection.North, true)),
+          false,
+          None,
+          3,
         )
       ))
   }
@@ -236,7 +266,7 @@ class BackendSuite extends FunSuite {
           ),
           false,
           None,
-          0,
+          1,
         )
       ))
       assertEquals(infoOpt2, Right(
@@ -250,7 +280,7 @@ class BackendSuite extends FunSuite {
           ),
           false,
           None,
-          0,
+          1,
         )
       ))
       assertEquals(infoOpt3, Right(
@@ -264,7 +294,7 @@ class BackendSuite extends FunSuite {
           ),
           true,
           infoOpt3.map(_.playerObservation).toOption.flatten,
-          0,
+          1,
         )
       ))
       assert(infoOpt3.map(_.playerObservation).toOption.flatten.nonEmpty)

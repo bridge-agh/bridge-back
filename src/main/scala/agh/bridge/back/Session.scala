@@ -51,8 +51,10 @@ object Session {
 
     def allReady = users.size == 4 && users.values.forall(_.ready)
 
+    def setAssistantLevel(level: Int) = LobbyState(host, users, math.max(1, math.min(level, 5)))
+
   private object LobbyState {
-    def apply(host: User.Actor): LobbyState = LobbyState(host, Map(host -> LobbyUserState(PlayerDirection.North, true)), 0)
+    def apply(host: User.Actor): LobbyState = LobbyState(host, Map(host -> LobbyUserState(PlayerDirection.North, true)), 1)
   }
 
   private final case class GameState private(
@@ -60,13 +62,8 @@ object Session {
   )
 
   private object GameState:
-    def apply(): GameState =
-      val impl = Core.Game(0)
-      // impl.step(Core.Bid(Core.BidLevel.One, Core.BidSuit.Clubs))
-      // impl.step(Core.Pass)
-      // impl.step(Core.Pass)
-      // impl.step(Core.Pass)
-      GameState(impl)
+    // Seed is set to 0 for development purposes
+    def apply(): GameState = GameState(Core.Game(0))
 
   private final case class SessionState private(lobby: LobbyState, game: Option[GameState]):
     def addUser(user: User.Actor) = SessionState(lobby.addUser(user), game)
@@ -76,6 +73,8 @@ object Session {
     def setReady(user: User.Actor, ready: Boolean) = SessionState(lobby.setReady(user, ready), game)
 
     def forceSwap(first: PlayerDirection, second: PlayerDirection) = SessionState(lobby.forceSwap(first, second), game)
+
+    def setAssistantLevel(level: Int) = SessionState(lobby.setAssistantLevel(level), game)
 
     def directionOf(user: User.Actor) = lobby.users(user).position
 
@@ -93,7 +92,7 @@ object Session {
       game match
         case Some(game) =>
           try {
-            // :(
+            // Note: this is not a pure function
             game.impl.step(action)
             Right(SessionState(lobby, Some(game)))
           } catch {
@@ -134,6 +133,7 @@ object Session {
   final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends LobbyCommand
   final case class SetUserReady(user: User.Actor, ready: Boolean, replyTo: ActorRef[Unit]) extends LobbyCommand
   final case class ForceSwap(first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Unit]) extends LobbyCommand
+  final case class SetAssistantLevel(level: Int, replyTo: ActorRef[Unit]) extends LobbyCommand
 
   sealed trait GameCommand extends Command
   final case class PlayAction(user: User.Actor, action: Core.Action, replyTo: ActorRef[Either[IllegalAction, Unit]]) extends GameCommand
@@ -175,6 +175,10 @@ object Session {
 
         case ForceSwap(first, second, replyTo) =>
           context.log.error("ForceSwap: no users")
+          Behaviors.unhandled
+
+        case SetAssistantLevel(level, replyTo) =>
+          context.log.error("SetAssistantLevel: no users")
           Behaviors.unhandled
 
         case GetInfo(user, replyTo) =>
@@ -269,6 +273,13 @@ object Session {
           notifySubscribers(subs, newState)
           lobby(id, newState, subs)
 
+        case SetAssistantLevel(level, replyTo) =>
+          context.log.debug("SetAssistantLevel")
+          val newState = state.setAssistantLevel(level)
+          replyTo ! ()
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
+
         case GetInfo(user, replyTo) =>
           context.log.debug("GetInfo")
           sendInfo(user, replyTo, state)
@@ -324,6 +335,7 @@ object Session {
 
         case PlayAction(user, action, replyTo) =>
           context.log.debug("PlayAction")
+          // This logic did not take into account the dummy player
           // if Some(user) != state.currentPlayer then
           //   context.log.error("PlayAction - not current player")
           //   replyTo ! Left(IllegalAction)
@@ -354,6 +366,10 @@ object Session {
 
         case ForceSwap(first, second, replyTo) =>
           context.log.error("ForceSwap - game already started")
+          Behaviors.unhandled
+
+        case SetAssistantLevel(level, replyTo) =>
+          context.log.error("SetAssistantLevel - game already started")
           Behaviors.unhandled
 
         case GetInfo(user, replyTo) =>
