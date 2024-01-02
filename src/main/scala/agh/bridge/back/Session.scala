@@ -390,6 +390,10 @@ object Session {
             case Right(newState) =>
               replyTo ! Right(())
               notifySubscribers(subs, newState)
+              if (!state.lobby.users(newState.currentPlayer.get).isHuman) {
+                context.log.debug("Next player is assistant")
+                context.scheduleOnce(1.second, context.self, PlayAction(newState.currentPlayer.get, Core.AssistantAction, context.system.ignoreRef))
+              }
               game(id, newState, subs)
 
         case AddUser(user, replyTo) =>

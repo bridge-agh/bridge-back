@@ -5,6 +5,9 @@ import me.shadaj.scalapy.py.Dynamic
 sealed trait Action:
   def py: Dynamic
 
+case object AssistantAction extends Action:
+  def py = BridgePy.core.AssistantAction()
+
 sealed trait Call extends Action
 
 object Call:
