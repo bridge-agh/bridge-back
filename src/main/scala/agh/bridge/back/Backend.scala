@@ -33,10 +33,12 @@ object Backend {
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
   final case class KickUser(userId: User.Id, kickId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
   final case class PlayAction(userId: User.Id, action: Core.Action, replyTo: ActorRef[Either[UserNotInSession | IllegalAction, Unit]]) extends UserCommand
+  final case class SetUserAsAssistant(userId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
 
   sealed trait SessionCommand extends Command
   final case class GetLobbyInfo(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound, Session.SessionInfo]]) extends SessionCommand
   final case class SubscribeToSessionInfo(sessionId: Session.Id, userId: User.Id, subscriber: ActorRef[Session.SessionInfo]) extends SessionCommand
+  final case class AddAssistant(sessionId: Session.Id, position: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends SessionCommand
 
   sealed trait LobbyCommand extends SessionCommand
   final case class ForceSwap(sessionId: Session.Id, first: PlayerDirection, second: PlayerDirection, replyTo: ActorRef[Either[SessionNotFound, Unit]]) extends LobbyCommand
@@ -221,6 +223,58 @@ object Backend {
         val user = users(userId)
         val sessionOpt = sessions.get(sessionId).toRight(SessionNotFound)
         sessionOpt.map(_ ! Session.AddSubscriber(user, subscriber))
+        if (users contains userId) Behaviors.same
+        else backend(users + (userId -> user), sessions)
+
+      case AddAssistant(sessionId, position, replyTo) =>
+        context.log.debug("[backend] AddAssistant({}, {})", sessionId, position)
+        val assistantId = java.util.UUID.randomUUID.toString
+        // join with virtual assistant user
+        val joinResFut = context.self.ask[Either[SessionNotFound | SessionFull, Unit]](JoinLobby(assistantId, sessionId, _))
+        // find position of assistant in lobby
+        val infoFut = joinResFut flatMap {
+          case Right(()) => context.self.ask[Either[SessionNotFound, Session.SessionInfo]](GetLobbyInfo(assistantId, sessionId, _))
+          case Left(err) => Future.successful(Left(err))
+        }
+        // swap assistant with target position
+        val swapFut = infoFut flatMap {
+          case Right(info) =>
+            info.users.find(_.id == assistantId).map(_.position) match
+              case Some(currentAssistantPosition) => 
+                context.self.ask[Either[SessionNotFound, Unit]](ForceSwap(sessionId, currentAssistantPosition, position, _))
+              case None => Future.successful(Left(SessionNotFound))
+          case Left(err) => Future.successful(Left(err))
+        }
+        // enable the assistant
+        val setAssistantFut = swapFut flatMap {
+          case Right(()) => context.self.ask[Either[UserNotInSession, Unit]](SetUserAsAssistant(assistantId, _))
+          case Left(err) => Future.successful(Left(err))
+        }
+        // set assistant as ready
+        val setReadyFut = setAssistantFut flatMap {
+          case Right(()) => context.self.ask[Either[UserNotInSession, Unit]](SetUserReady(assistantId, true, _))
+          case Left(err) => Future.successful(Left(err))
+        }
+        val replyFut = setReadyFut map {
+          case Left(UserNotInSession) => Left(SessionNotFound)
+          case Left(SessionNotFound) => Left(SessionNotFound)
+          case Left(SessionFull) => Left(SessionFull)
+          case Right(()) => Right(())
+        }
+        replyFut map (replyTo ! _)
+        Behaviors.same
+
+      case SetUserAsAssistant(userId, replyTo) =>
+        context.log.debug("[backend] SetUserAsAssistant({})", userId)
+        val user = users(userId)
+        for
+          session <- user.ask[Option[Session.Actor]](User.GetSession(_))
+        do
+          val res = session match {
+            case Some(session) => session.ask[Unit](Session.SetUserAsAssistant(user, _)).map(Right.apply)
+            case None => Future.successful(Left(UserNotInSession))
+          }
+          res map (replyTo ! _)
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
     }

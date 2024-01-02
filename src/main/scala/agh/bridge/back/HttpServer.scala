@@ -99,7 +99,8 @@ object HttpServer {
   // POST /session/lobby/set-assistant
   // set the specified position to be an AI assistant in the game the logged in user is in
 
-  // TODO
+  private final case class SetAssistantRequest(direction: Int)
+  private given RootJsonFormat[SetAssistantRequest] = jsonFormat1(SetAssistantRequest.apply)
 
   // POST /session/lobby/ready
   // set the ready status of the logged in user in his game
@@ -236,6 +237,23 @@ object HttpServer {
                           complete(resFut map {
                             case Right(()) => StatusCodes.OK
                             case Left(Backend.SessionNotFound) => StatusCodes.NotFound
+                          })
+                      }
+                    },
+                    (path("promote-host") & post) {
+                      // TODO
+                      complete(StatusCodes.NotImplemented)
+                    },
+                    (path("set-assistant") & post & entity(as[SetAssistantRequest])) { request =>
+                      val sessionIdFut = backend.ask[Either[Backend.SessionNotFound, Session.Id]](Backend.FindSession(userId, _))
+                      onSuccess(sessionIdFut) {
+                        case Left(Backend.SessionNotFound) => complete(StatusCodes.NotFound)
+                        case Right(sessionId) =>
+                          val resFut = backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.AddAssistant(sessionId, PlayerDirection.fromOrdinal(request.direction), _))
+                          complete(resFut map {
+                            case Right(()) => StatusCodes.OK
+                            case Left(Backend.SessionNotFound) => StatusCodes.NotFound
+                            case Left(Session.SessionFull) => StatusCodes.Conflict
                           })
                       }
                     },

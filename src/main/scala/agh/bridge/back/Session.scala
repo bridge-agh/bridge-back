@@ -20,6 +20,8 @@ object Session {
 
     def setPosition(position: PlayerDirection) = LobbyUserState(ready, position, isHuman)
 
+    def setAssistant() = copy(isHuman = false)
+
   private object LobbyUserState:
     def apply(position: PlayerDirection, isHuman: Boolean): LobbyUserState = LobbyUserState(false, position, isHuman)
 
@@ -49,6 +51,13 @@ object Session {
         assistantLevel,
       )
 
+    def setUserAsAssistant(user: User.Actor) =
+      val newUsers = users.map {
+        case (u, state) if u == user => (u, state.setAssistant())
+        case o => o
+      }
+      copy(users = newUsers)
+
     def allReady = users.size == 4 && users.values.forall(_.ready)
 
     def setAssistantLevel(level: Int) = LobbyState(host, users, math.max(1, math.min(level, 5)))
@@ -73,6 +82,8 @@ object Session {
     def setReady(user: User.Actor, ready: Boolean) = SessionState(lobby.setReady(user, ready), game)
 
     def forceSwap(first: PlayerDirection, second: PlayerDirection) = SessionState(lobby.forceSwap(first, second), game)
+
+    def setUserAsAssistant(user: User.Actor) = SessionState(lobby.setUserAsAssistant(user), game)
 
     def setAssistantLevel(level: Int) = SessionState(lobby.setAssistantLevel(level), game)
 
@@ -129,6 +140,7 @@ object Session {
   final case class KickUser(kicker: User.Actor, kicked: User.Actor, replyTo: ActorRef[Unit]) extends Command
   final case class GetInfo(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
   final case class AddSubscriber(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
+  final case class SetUserAsAssistant(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
 
   sealed trait LobbyCommand extends Command
   final case class AddUser(user: User.Actor, replyTo: ActorRef[Either[SessionFull, Unit]]) extends LobbyCommand
@@ -180,6 +192,10 @@ object Session {
 
         case ForceSwap(first, second, replyTo) =>
           context.log.error("ForceSwap: no users")
+          Behaviors.unhandled
+
+        case SetUserAsAssistant(user, replyTo) =>
+          context.log.error("SetUserAsAssistant: no users")
           Behaviors.unhandled
 
         case SetAssistantLevel(level, replyTo) =>
@@ -287,6 +303,17 @@ object Session {
           notifySubscribers(subs, newState)
           lobby(id, newState, subs)
 
+        case SetUserAsAssistant(user, replyTo) if state.lobby.users.contains(user) =>
+          context.log.debug("SetUserAsAssistant")
+          val newState = state.setUserAsAssistant(user)
+          replyTo ! ()
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
+
+        case SetUserAsAssistant(user, replyTo) =>
+          context.log.error("SetUserAsAssistant - user not in session")
+          Behaviors.unhandled
+
         case SetAssistantLevel(level, replyTo) =>
           context.log.debug("SetAssistantLevel")
           val newState = state.setAssistantLevel(level)
@@ -389,6 +416,17 @@ object Session {
 
         case ForceSwap(first, second, replyTo) =>
           context.log.error("ForceSwap - game already started")
+          Behaviors.unhandled
+
+        case SetUserAsAssistant(user, replyTo) if state.lobby.users.contains(user) =>
+          context.log.debug("SetUserAsAssistant")
+          val newState = state.setUserAsAssistant(user)
+          replyTo ! ()
+          notifySubscribers(subs, newState)
+          lobby(id, newState, subs)
+
+        case SetUserAsAssistant(user, replyTo) =>
+          context.log.error("SetUserAsAssistant - user not in session")
           Behaviors.unhandled
 
         case SetAssistantLevel(level, replyTo) =>

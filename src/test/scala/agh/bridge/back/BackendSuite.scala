@@ -312,4 +312,27 @@ class BackendSuite extends FunSuite {
       ))
       assert(infoOpt3.map(_.playerObservation).toOption.flatten.nonEmpty)
   }
+
+  backendTestKit.test("add assistant to lobby") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("u1", _))
+      setRes <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.AddAssistant(sessionId, PlayerDirection.East, _))
+      infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("u1", sessionId, _))
+    yield
+      assert(sessionId.nonEmpty)
+      assertEquals(setRes, Right(()))
+      assertEquals(infoOpt, Right(
+        Session.SessionInfo(
+          "u1",
+          List(
+            Session.PlayerInfo("u1", false, PlayerDirection.North, true),
+            Session.PlayerInfo(infoOpt.right.get.users(1).id, true, PlayerDirection.East, false),
+          ),
+          false,
+          None,
+          1,
+        )
+      ))
+  }
 }
