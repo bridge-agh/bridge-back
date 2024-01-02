@@ -110,7 +110,8 @@ object HttpServer {
   // POST /session/lobby/kick
   // kick the specified player from the game the logged in user is in
 
-  // TODO
+  private final case class KickRequest(id: User.Id)
+  private given RootJsonFormat[KickRequest] = jsonFormat1(KickRequest.apply)
 
 
   // --- /session/game ---
@@ -240,6 +241,13 @@ object HttpServer {
                     },
                     (path("ready") & post & entity(as[SetUserReadyRequest])) { request =>
                       val resFut = backend.ask[Either[Backend.UserNotInSession, Unit]](Backend.SetUserReady(userId, request.ready, _))
+                      complete(resFut map {
+                        case Right(()) => StatusCodes.OK
+                        case Left(Backend.UserNotInSession) => StatusCodes.NotFound
+                      })
+                    },
+                    (path("kick") & post & entity(as[KickRequest])) { request =>
+                      val resFut = backend.ask[Either[Backend.UserNotInSession, Unit]](Backend.KickUser(userId, request.id, _))
                       complete(resFut map {
                         case Right(()) => StatusCodes.OK
                         case Left(Backend.UserNotInSession) => StatusCodes.NotFound

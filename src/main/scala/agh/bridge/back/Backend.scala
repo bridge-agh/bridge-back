@@ -31,6 +31,7 @@ object Backend {
   final case class CreateLobby(hostId: User.Id, replyTo: ActorRef[Session.Id]) extends UserCommand
   final case class JoinLobby(userId: User.Id, sessionId: Session.Id, replyTo: ActorRef[Either[SessionNotFound | SessionFull, Unit]]) extends UserCommand
   final case class SetUserReady(userId: User.Id, ready: Boolean, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
+  final case class KickUser(userId: User.Id, kickId: User.Id, replyTo: ActorRef[Either[UserNotInSession, Unit]]) extends UserCommand
   final case class PlayAction(userId: User.Id, action: Core.Action, replyTo: ActorRef[Either[UserNotInSession | IllegalAction, Unit]]) extends UserCommand
 
   sealed trait SessionCommand extends Command
@@ -177,6 +178,21 @@ object Backend {
           res map (replyTo ! _)
         if (users contains userId) Behaviors.same
         else backend(users + (userId -> user), sessions)
+
+      case KickUser(userId, kickId, replyTo) =>
+        context.log.debug("[backend] KickUser({}, {})", userId, kickId)
+        val kicker = users(userId)
+        val kicked = users(kickId)
+        for
+          session <- kicker.ask[Option[Session.Actor]](User.GetSession(_))
+        do
+          val res = session match {
+            case Some(session) => session.ask[Unit](Session.KickUser(kicker, kicked, _)).map(Right.apply)
+            case None => Future.successful(Left(UserNotInSession))
+          }
+          res map (replyTo ! _)
+        if (users contains userId) Behaviors.same
+        else backend(users + (userId -> kicker), sessions)
 
       case PlayAction(userId, action, replyTo) =>
         context.log.debug("[backend] PlayAction({}, {})", userId, action)

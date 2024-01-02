@@ -126,6 +126,7 @@ object Session {
   sealed trait Command
   final case class GetId(replyTo: ActorRef[Id]) extends Command
   final case class RemoveUser(user: User.Actor, replyTo: ActorRef[Unit]) extends Command
+  final case class KickUser(kicker: User.Actor, kicked: User.Actor, replyTo: ActorRef[Unit]) extends Command
   final case class GetInfo(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
   final case class AddSubscriber(user: User.Actor, replyTo: ActorRef[SessionInfo]) extends Command
 
@@ -167,6 +168,10 @@ object Session {
 
         case RemoveUser(user, replyTo) =>
           context.log.error("RemoveUser: no users")
+          Behaviors.unhandled
+
+        case KickUser(kicker, kicked, replyTo) =>
+          context.log.error("KickUser: no users")
           Behaviors.unhandled
 
         case SetUserReady(user, ready, replyTo) =>
@@ -249,6 +254,15 @@ object Session {
 
         case RemoveUser(user, replyTo) =>
           context.log.error("RemoveUser - user not in session")
+          Behaviors.unhandled
+
+        case KickUser(kicker, kicked, replyTo) if kicker == state.lobby.host && kicked != state.lobby.host && state.lobby.users.contains(kicked) =>
+          context.log.debug("KickUser")
+          context.self ! RemoveUser(kicked, replyTo)
+          Behaviors.same
+
+        case KickUser(kicker, kicked, replyTo) =>
+          context.log.error("KickUser - bad conditions")
           Behaviors.unhandled
 
         case SetUserReady(user, ready, replyTo) if state.lobby.users.contains(user) =>
@@ -359,6 +373,15 @@ object Session {
           context.log.debug("RemoveUser - killing game")
           replyTo ! ()
           Behaviors.stopped
+
+        case KickUser(kicker, kicked, replyTo) if kicker == state.lobby.host && kicked != state.lobby.host && state.lobby.users.contains(kicked) =>
+          context.log.debug("KickUser")
+          context.self ! RemoveUser(kicked, replyTo)
+          Behaviors.same
+
+        case KickUser(kicker, kicked, replyTo) =>
+          context.log.error("KickUser - bad conditions")
+          Behaviors.unhandled
 
         case SetUserReady(user, ready, replyTo) =>
           context.log.error("SetUserReady - game already started")

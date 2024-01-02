@@ -89,6 +89,19 @@ class BackendSuite extends FunSuite {
       assertEquals(infoOpt3, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", true, PlayerDirection.North, true), Session.PlayerInfo("guest", false, PlayerDirection.East, true)), false, None, 1)))
   }
 
+  backendTestKit.test("kick") { (testKit, backend) =>
+    given ActorSystem[_] = testKit.system
+    for
+      sessionId <- backend.ask[Session.Id](Backend.CreateLobby("host", _))
+      joinRes <- backend.ask[Either[Backend.SessionNotFound | Session.SessionFull, Unit]](Backend.JoinLobby("guest", sessionId, _))
+      kickRes <- backend.ask[Either[Backend.SessionNotFound | Backend.UserNotInSession, Unit]](Backend.KickUser("host", "guest", _))
+      infoOpt <- backend.ask[Either[Backend.SessionNotFound, Session.SessionInfo]](Backend.GetLobbyInfo("host", sessionId, _))
+    yield
+      assertEquals(joinRes, Right(()))
+      assertEquals(kickRes, Right(()))
+      assertEquals(infoOpt, Right(Session.SessionInfo("host", List(Session.PlayerInfo("host", false, PlayerDirection.North, true)), false, None, 1)))
+  }
+
   backendTestKit.test("create lobby when in lobby") { (testKit, backend) =>
     given ActorSystem[_] = testKit.system
     for
