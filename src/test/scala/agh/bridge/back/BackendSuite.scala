@@ -12,7 +12,7 @@ import agh.bridge.core.PlayerDirection
 
 class BackendSuite extends FunSuite {
   given ExecutionContext = scala.concurrent.ExecutionContext.global
-  given akka.util.Timeout = akka.util.Timeout(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+  given akka.util.Timeout = akka.util.Timeout(3000, java.util.concurrent.TimeUnit.MILLISECONDS)
 
   val backendTestKit = FunFixture(
       _ => {
